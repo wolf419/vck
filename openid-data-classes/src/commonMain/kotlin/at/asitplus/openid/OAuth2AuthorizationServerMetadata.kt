@@ -383,6 +383,36 @@ data class OAuth2AuthorizationServerMetadata(
      */
     @SerialName("code_challenge_methods_supported")
     val codeChallengeMethodsSupported: Set<String>? = null,
+
+    /**
+     * The Authorization Server SHOULD communicate supported algorithms for client attestations by using
+     * [clientAttestationSigningAlgValuesSupportedStrings] and [clientAttestationPopSigningAlgValuesSupportedStrings]
+     * within its published metadata. This enables the client to validate that its client attestation is understood by
+     * the Authorization Server prior to authentication.
+     * The client MAY try to get a new client attestation with different algorithms.
+     * The Authorization Server MUST include [clientAttestationSigningAlgValuesSupportedStrings] and
+     * [clientAttestationPopSigningAlgValuesSupportedStrings] in its published metadata if the
+     * [tokenEndPointAuthMethodsSupported] includes `attest_jwt_client_auth`.
+     * See
+     * [OAuth 2.0 Attestation-Based Client Authentication](https://www.ietf.org/archive/id/draft-ietf-oauth-attestation-based-client-auth-07.html#name-authorization-server-metada)
+     */
+    @SerialName("client_attestation_pop_signing_alg_values_supported")
+    val clientAttestationPopSigningAlgValuesSupportedStrings: Set<String>? = null,
+
+    /**
+     * The Authorization Server SHOULD communicate supported algorithms for client attestations by using
+     * [clientAttestationSigningAlgValuesSupportedStrings] and [clientAttestationPopSigningAlgValuesSupportedStrings]
+     * within its published metadata. This enables the client to validate that its client attestation is understood by
+     * the Authorization Server prior to authentication.
+     * The client MAY try to get a new client attestation with different algorithms.
+     * The Authorization Server MUST include [clientAttestationSigningAlgValuesSupportedStrings] and
+     * [clientAttestationPopSigningAlgValuesSupportedStrings] in its published metadata if the
+     * [tokenEndPointAuthMethodsSupported] includes `attest_jwt_client_auth`.
+     * See
+     * [OAuth 2.0 Attestation-Based Client Authentication](https://www.ietf.org/archive/id/draft-ietf-oauth-attestation-based-client-auth-07.html#name-authorization-server-metada)
+     */
+    @SerialName("client_attestation_signing_alg_values_supported")
+    val clientAttestationSigningAlgValuesSupportedStrings: Set<String>? = null,
 ) {
 
     /**
