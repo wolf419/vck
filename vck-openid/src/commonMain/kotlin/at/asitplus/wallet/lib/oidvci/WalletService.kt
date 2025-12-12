@@ -4,20 +4,34 @@ import at.asitplus.KmmResult
 import at.asitplus.catching
 import at.asitplus.catchingUnwrapped
 import at.asitplus.iso.IssuerSigned
-import at.asitplus.openid.*
+import at.asitplus.openid.AuthorizationDetails
+import at.asitplus.openid.ClientNonceResponse
+import at.asitplus.openid.CredentialOffer
+import at.asitplus.openid.CredentialOfferUrlParameters
+import at.asitplus.openid.CredentialRequestParameters
+import at.asitplus.openid.CredentialRequestProofContainer
+import at.asitplus.openid.CredentialRequestProofSupported
+import at.asitplus.openid.CredentialResponseParameters
+import at.asitplus.openid.IssuerMetadata
+import at.asitplus.openid.OpenIdAuthorizationDetails
 import at.asitplus.openid.OpenIdConstants
 import at.asitplus.openid.OpenIdConstants.ProofTypes
+import at.asitplus.openid.SupportedCredentialFormat
+import at.asitplus.openid.TokenResponseParameters
+import at.asitplus.openid.truncateToSeconds
 import at.asitplus.signum.indispensable.cosef.io.coseCompliantSerializer
-import at.asitplus.signum.indispensable.josef.*
+import at.asitplus.signum.indispensable.josef.JsonWebKeySet
 import at.asitplus.signum.indispensable.josef.JsonWebToken
+import at.asitplus.signum.indispensable.josef.JweEncrypted
+import at.asitplus.signum.indispensable.josef.JwsHeader
+import at.asitplus.signum.indispensable.josef.JwsSigned
+import at.asitplus.signum.indispensable.josef.KeyAttestationJwt
 import at.asitplus.signum.indispensable.josef.io.joseCompliantSerializer
 import at.asitplus.wallet.lib.RemoteResourceRetrieverFunction
 import at.asitplus.wallet.lib.RemoteResourceRetrieverInput
 import at.asitplus.wallet.lib.agent.EphemeralKeyWithoutCert
 import at.asitplus.wallet.lib.agent.Holder
-import at.asitplus.wallet.lib.agent.Holder.StoreCredentialInput.Iso
-import at.asitplus.wallet.lib.agent.Holder.StoreCredentialInput.SdJwt
-import at.asitplus.wallet.lib.agent.Holder.StoreCredentialInput.Vc
+import at.asitplus.wallet.lib.agent.Holder.StoreCredentialInput.*
 import at.asitplus.wallet.lib.agent.KeyMaterial
 import at.asitplus.wallet.lib.data.ConstantIndex
 import at.asitplus.wallet.lib.data.ConstantIndex.CredentialRepresentation
@@ -37,9 +51,8 @@ import io.ktor.util.*
 import io.matthewnelson.encoding.base64.Base64
 import io.matthewnelson.encoding.core.Decoder.Companion.decodeToByteArray
 import kotlinx.serialization.decodeFromByteArray
-import kotlin.time.Clock
 import kotlinx.serialization.json.decodeFromJsonElement
-import kotlin.collections.map
+import kotlin.time.Clock
 
 /**
  * Client service to retrieve credentials using OID4VCI
@@ -225,9 +238,9 @@ class WalletService(
         val requests = if (tokenResponse.authorizationDetails != null) {
             tokenResponse.authorizationDetails!!.toCredentialRequest()
         } else if (tokenResponse.scope != null) {
-            tokenResponse.scope!!.toCredentialRequest(metadata)
+            tokenResponse.scope!!.toCredentialRequest(metadata, credentialFormat)
         } else if (previouslyRequestedScope != null) {
-            previouslyRequestedScope.toCredentialRequest(metadata)
+            previouslyRequestedScope.toCredentialRequest(metadata, credentialFormat)
         } else {
             throw InvalidToken("Can't parse token: $tokenResponse")
         }
@@ -296,13 +309,15 @@ class WalletService(
             } else throw InvalidToken("Invalid authorization details: $it")
         }
 
-    private fun String.toCredentialRequest(metadata: IssuerMetadata): Set<CredentialRequestParameters> =
-        trim().split(" ").map { scope ->
-            metadata.supportedCredentialConfigurations
-                ?.entries?.firstOrNull { it.value.scope == scope }?.key
-                ?.let { CredentialRequestParameters(credentialConfigurationId = it) }
-                ?: throw OAuth2Exception.UnknownCredentialConfiguration(scope)
-        }.toSet()
+    private fun String.toCredentialRequest(
+        metadata: IssuerMetadata,
+        credentialFormat: SupportedCredentialFormat,
+    ): Set<CredentialRequestParameters> = trim().split(" ").map { scope ->
+        metadata.supportedCredentialConfigurations
+            ?.entries?.firstOrNull { it.value.scope == scope && it.value.format == credentialFormat.format }?.key
+            ?.let { CredentialRequestParameters(credentialConfigurationId = it) }
+            ?: throw OAuth2Exception.UnknownCredentialConfiguration(scope)
+    }.toSet()
 
     internal suspend fun createCredentialRequestProof(
         metadata: IssuerMetadata,
