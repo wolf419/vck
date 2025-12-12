@@ -359,7 +359,7 @@ class OAuth2KtorClient(
                 authRequest.encodeToParameters().forEach { append(it.key, it.value) }
                 append(OpenIdConstants.PARAMETER_PROMPT, OpenIdConstants.PARAMETER_PROMPT_LOGIN)
             }))
-            applyAuthnForToken(oauthMetadata, popAudience, parEndpointUrl, HttpMethod.Post, false, dpopNonce)()
+            applyAuthnForToken(oauthMetadata, popAudience, parEndpointUrl, HttpMethod.Post, true, dpopNonce)()
         }.onFailure { response ->
             dpopNonce(response)?.takeIf { retryCount == 0 }?.let { dpopNonce ->
                 pushAuthorizationRequest(oauthMetadata, authRequest, state, popAudience, dpopNonce, retryCount + 1)
