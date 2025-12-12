@@ -169,8 +169,16 @@ class SimpleAuthorizationService(
      */
     override suspend fun metadata(): OAuth2AuthorizationServerMetadata = _metadata
 
+    @Deprecated("Use credentialOfferWithAuthorizationCode with parameter configurationIds")
+    suspend fun credentialOfferWithAuthorizationCode(
+        credentialIssuer: String,
+    ) = credentialOfferWithAuthorizationCode(
+        credentialIssuer = credentialIssuer,
+        configurationIds = strategy.allCredentialIdentifier()
+    )
+
     /**
-     * Offer all available schemes from [strategy] to clients.
+     * Offer some credential identifiers from [strategy] to clients with auth-code flow.
      *
      * Callers need to encode this in [CredentialOfferUrlParameters], and offer the resulting URL to clients,
      * i.e. by displaying a QR Code that can be scanned with wallet apps.
@@ -179,9 +187,10 @@ class SimpleAuthorizationService(
      */
     suspend fun credentialOfferWithAuthorizationCode(
         credentialIssuer: String,
+        configurationIds: Collection<String> = this.strategy.allCredentialIdentifier(),
     ): CredentialOffer = CredentialOffer(
         credentialIssuer = credentialIssuer,
-        configurationIds = strategy.allCredentialIdentifier(),
+        configurationIds = configurationIds.ifEmpty { strategy.allCredentialIdentifier() },
         grants = CredentialOfferGrants(
             authorizationCode = CredentialOfferGrantsAuthCode(
                 issuerState = codeService.provideCode(),
@@ -352,12 +361,15 @@ class SimpleAuthorizationService(
             strategy.filterScope(it)
                 ?: throw InvalidScope("No matching scope in $it")
         }
-        if (issuerState != null) {
-            if (!codeService.verifyAndRemove(issuerState!!)
-                || issuerStateToCredentialOffer.remove(issuerState!!) == null
-            ) throw InvalidGrant("issuer_state invalid: $issuerState")
-            // the actual credential offer is irrelevant, because we're always offering all credentials
-        }
+        val issuerStateCorrect = issuerState?.let {
+            if (codeService.verifyAndRemove(it)) true
+            else if (issuerStateToCredentialOffer.remove(it) != null) true
+            else false
+        } ?: true
+        if (!issuerStateCorrect)
+            throw InvalidGrant("issuer_state invalid: $issuerState")
+        // todo compare the actual credential offer against the request, if it matches semantically
+
         authorizationDetails?.let {
             strategy.validateAuthorizationDetails(it)
         }

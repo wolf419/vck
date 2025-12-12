@@ -136,8 +136,10 @@ class JwtTokenVerificationService(
         if (dpopProof.header.type != JwsContentTypeConstants.DPOP_JWT) {
             throw InvalidDpopProof("invalid type: ${dpopProof.header.type}")
         }
-        if (dpopProof.payload.nonce == null || !dpopNonceService.verifyAndRemoveNonce(dpopProof.payload.nonce!!)) {
-            throw UseDpopNonce(dpopNonceService.provideNonce(), "DPoP JWT nonce not valid: ${dpopProof.payload.nonce}")
+        val nonce = dpopProof.payload.nonce
+            ?: throw UseDpopNonce(dpopNonceService.provideNonce(), "DPoP JWT nonce is null")
+        if (!dpopNonceService.verifyAndRemoveNonce(nonce)) {
+            throw UseDpopNonce(dpopNonceService.provideNonce(), "DPoP JWT nonce not valid: $nonce")
         }
         if (dpopProof.payload.httpTargetUrl != httpRequest.url) {
             throw InvalidDpopProof("DPoP JWT htu incorrect: ${dpopProof.payload.httpTargetUrl}")
@@ -182,11 +184,10 @@ class JwtTokenVerificationService(
             }
         } else {
             // DPoP-JWT has already been verified, so we can't check for the nonce twice
-            if (dpopProof.payload.nonce == null || !dpopNonceService.verifyAndRemoveNonce(dpopProof.payload.nonce!!)) {
-                throw UseDpopNonce(
-                    dpopNonceService.provideNonce(),
-                    "DPoP JWT nonce not valid: ${dpopProof.payload.nonce}"
-                )
+            val nonce = dpopProof.payload.nonce
+                ?: throw UseDpopNonce(dpopNonceService.provideNonce(), "DPoP JWT nonce is null")
+            if (!dpopNonceService.verifyAndRemoveNonce(nonce)) {
+                throw UseDpopNonce(dpopNonceService.provideNonce(), "DPoP JWT nonce not valid: $nonce")
             }
         }
         if (dpopProof.payload.httpTargetUrl != httpRequest.url) {

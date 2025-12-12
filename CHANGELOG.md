@@ -3,6 +3,8 @@
 Release 5.11.0 (unreleased):
  - Add `VerifyStatusListTokenHAIP` and related resolver/tests to enforce HAIP d04
  - Add `IdentifierList` and `IdentifierListInfo` and related classes
+ - OpenID for Verifiable Credential Issuance:
+   - In `SimpleAuthorizationService` add parameter `configurationIds` to method `credentialOfferWithAuthorizationCode`
 
 Release 5.10.1:
  - Proximity presentations:
