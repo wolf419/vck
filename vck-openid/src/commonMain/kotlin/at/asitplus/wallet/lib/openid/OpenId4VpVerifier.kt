@@ -18,7 +18,6 @@ import at.asitplus.iso.sha256
 import at.asitplus.iso.wrapInCborTag
 import at.asitplus.jsonpath.JsonPath
 import at.asitplus.openid.AuthenticationRequestParameters
-import at.asitplus.openid.AuthenticationResponseParameters
 import at.asitplus.openid.CredentialFormatEnum
 import at.asitplus.openid.IdToken
 import at.asitplus.openid.IdTokenType
@@ -128,10 +127,12 @@ class OpenId4VpVerifier(
     private val nonceService: NonceService = DefaultNonceService(),
     /** Used to store issued authn requests to verify the authn response to it */
     private val stateToAuthnRequestStore: MapStore<String, AuthenticationRequestParameters> = DefaultMapStore(),
-    /** Algorithm supported to decrypt responses from wallets, for [metadataWithEncryption]. */
+    @Deprecated("Use supportedJweEncryptionAlgorithms instead")
     private val supportedJweAlgorithm: JweAlgorithm = JweAlgorithm.ECDH_ES,
-    /** Algorithm supported to decrypt responses from wallets, for [metadataWithEncryption]. */
+    @Deprecated("Use supportedJweEncryptionAlgorithms instead")
     private val supportedJweEncryptionAlgorithm: JweEncryption = JweEncryption.A256GCM,
+    /** Algorithms supported to decrypt responses from wallets, for [metadataWithEncryption]. */
+    private val supportedJweEncryptionAlgorithms: Set<JweEncryption> = JweEncryption.entries.toSet(),
 ) {
 
     private val supportedJwsAlgorithms = supportedAlgorithms
@@ -180,9 +181,7 @@ class OpenId4VpVerifier(
     @Suppress("DEPRECATION")
     val metadataWithEncryption by lazy {
         metadata.copy(
-            authorizationEncryptedResponseAlgString = supportedJweAlgorithm.identifier,
-            authorizationEncryptedResponseEncodingString = supportedJweEncryptionAlgorithm.identifier,
-            encryptedResponseEncValuesSupportedString = setOf(supportedJweEncryptionAlgorithm.identifier),
+            encryptedResponseEncValuesSupportedString = supportedJweEncryptionAlgorithms.map { it.identifier }.toSet(),
             jsonWebKeySet = metadata.jsonWebKeySet?.let {
                 JsonWebKeySet(it.keys.map { it.copy(publicKeyUse = "enc") })
             }
@@ -486,7 +485,7 @@ class OpenId4VpVerifier(
     @Throws(IllegalArgumentException::class, CancellationException::class)
     private suspend fun loadAuthnRequest(
         input: ResponseParametersFrom,
-        externalId: String?
+        externalId: String?,
     ): AuthenticationRequestParameters {
         val storedId = externalId
             ?: input.parameters.state

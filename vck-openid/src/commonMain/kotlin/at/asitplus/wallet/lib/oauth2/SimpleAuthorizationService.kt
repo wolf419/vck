@@ -136,6 +136,7 @@ class SimpleAuthorizationService(
      * - this is the default behaviour of [at.asitplus.wallet.lib.ktor.openid.OAuth2KtorClient]
      */
     private val requestObjectSigningAlgorithms: Set<JwsAlgorithm.Signature>? = setOf(JwsAlgorithm.Signature.ES256),
+    /** Used for [OAuth2AuthorizationServerMetadata.clientAttestationSigningAlgValuesSupportedStrings] */
     private val supportedSigningAlgorithms: Set<JwsAlgorithm.Signature> = setOf(JwsAlgorithm.Signature.ES256)
 ) : OAuth2AuthorizationServerAdapter, AuthorizationService {
 
@@ -150,11 +151,13 @@ class SimpleAuthorizationService(
             introspectionEndpointAuthMethodsSupported = setOf(AUTH_METHOD_ATTEST_JWT_CLIENT_AUTH),
             requirePushedAuthorizationRequests = requirePushedAuthorizationRequests,
             tokenEndPointAuthMethodsSupported = setOf(AUTH_METHOD_ATTEST_JWT_CLIENT_AUTH), // per OID4VC HAIP
-            clientAttestationSigningAlgValuesSupportedStrings = supportedSigningAlgorithms.map {it.identifier }.toSet(),
-            clientAttestationPopSigningAlgValuesSupportedStrings = supportedSigningAlgorithms.map {it.identifier }.toSet(),
+            clientAttestationSigningAlgValuesSupportedStrings = supportedSigningAlgorithms
+                .map { it.identifier }.toSet(),
+            clientAttestationPopSigningAlgValuesSupportedStrings = supportedSigningAlgorithms
+                .map { it.identifier }.toSet(),
             dpopSigningAlgValuesSupportedStrings = tokenService.dpopSigningAlgValuesSupportedStrings,
-            requestObjectSigningAlgorithmsSupportedStrings = requestObjectSigningAlgorithms?.map { it.identifier }
-                ?.toSet(),
+            requestObjectSigningAlgorithmsSupportedStrings = requestObjectSigningAlgorithms
+                ?.map { it.identifier }?.toSet(),
             grantTypesSupported = setOfNotNull(
                 OpenIdConstants.GRANT_TYPE_AUTHORIZATION_CODE,
                 OpenIdConstants.GRANT_TYPE_PRE_AUTHORIZED_CODE,
