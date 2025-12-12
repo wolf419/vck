@@ -343,7 +343,8 @@ class OpenId4VciClient(
             ?: credentialOffer.credentialIssuer
         val oauthMetadata = loadOauthMetadata(authorizationServer).getOrThrow()
         val state = uuid4().toString()
-        credentialOffer.grants?.preAuthorizedCode?.let {
+        val preAuthorizedCode = credentialOffer.grants?.preAuthorizedCode
+        if (preAuthorizedCode != null) {
             val credentialScheme = credentialIdentifierInfo.supportedCredentialFormat.resolveCredentialScheme()
                 ?: throw Exception("Unknown credential scheme in $credentialIdentifierInfo")
 
@@ -353,8 +354,8 @@ class OpenId4VciClient(
             )
             val tokenResponse = oauth2Client.requestTokenWithPreAuthorizedCode(
                 oauthMetadata = oauthMetadata,
-                authorizationServer = issuerMetadata.credentialIssuer,
-                preAuthorizedCode = it.preAuthorizedCode,
+                authorizationServer = preAuthorizedCode.authorizationServer ?: issuerMetadata.credentialIssuer,
+                preAuthorizedCode = preAuthorizedCode.preAuthorizedCode,
                 transactionCode = transactionCode,
                 scope = credentialIdentifierInfo.supportedCredentialFormat.scope,
                 authorizationDetails = authorizationDetails
@@ -371,13 +372,12 @@ class OpenId4VciClient(
                 credentialIdentifier = credentialIdentifierInfo.credentialIdentifier,
                 previouslyRequestedScope = credentialIdentifierInfo.supportedCredentialFormat.scope,
             )
-        } ?: credentialOffer.grants?.authorizationCode?.let {
-
+        } else {
             oauth2Client.startAuthorization(
                 oauthMetadata = oauthMetadata,
-                authorizationServer = authorizationServer,
+                authorizationServer = credentialOffer.grants?.authorizationCode?.authorizationServer ?: authorizationServer,
                 state = state,
-                issuerState = it.issuerState,
+                issuerState = credentialOffer.grants?.authorizationCode?.issuerState,
                 authorizationDetails = oid4vciService.buildAuthorizationDetails(
                     credentialIdentifierInfo.credentialIdentifier,
                     issuerMetadata.authorizationServers
@@ -394,9 +394,8 @@ class OpenId4VciClient(
                     )
                 )
             }
-        } ?: throw Exception("No offer grants received in ${credentialOffer.grants}")
+        }
     }
-
 
     /** Loads [IssuerMetadata] from [credentialIssuer], see [WellKnownPaths.CredentialIssuer]. */
     private suspend fun loadIssuerMetadata(
