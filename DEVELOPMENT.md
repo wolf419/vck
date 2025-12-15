@@ -1,7 +1,8 @@
 # Development
 
-IDEA has a bug when importing composite KMP builds. If you are not using a Mac for development, add `iosDisabled=true` to your
-`local.properties`.
+* Clone recursively or at least init and update the `conventions-vclib/gradle-conventions-plugin` submodule manually
+* Make sure you have the path to an Android SDK path properly set up in `local.properties`! Otherwise this project will fail to load.
+* If you are using a composite build, be sure to also setup an Android SDK path in `signum/local.properties`! Otherwise this project will also fail to load.
 
 ## Publishing
 
