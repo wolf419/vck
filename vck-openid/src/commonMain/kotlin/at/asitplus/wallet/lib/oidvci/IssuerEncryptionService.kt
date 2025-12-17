@@ -48,9 +48,7 @@ class IssuerEncryptionService(
 
     val metadataCredentialRequestEncryption = if (requireResponseEncryption || requireRequestEncryption)
         SupportedAlgorithmsContainer(
-            //supportedAlgorithmsStrings = supportedJweAlgorithms.map { it.identifier }.toSet(),
-            supportedEncryptionAlgorithmsStrings = supportedJweEncryptionAlgorithms
-                .map { it.identifier }.toSet(),
+            supportedEncryptionAlgorithmsStrings = supportedJweEncryptionAlgorithms.map { it.identifier }.toSet(),
             encryptionRequired = requireRequestEncryption,
             jsonWebKeySet = JsonWebKeySet(
                 listOf(decryptionKeyMaterial.publicKey.toJsonWebKey(decryptionKeyMaterial.identifier).forEncryption())

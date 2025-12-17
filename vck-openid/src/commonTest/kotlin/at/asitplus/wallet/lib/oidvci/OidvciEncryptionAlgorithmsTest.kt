@@ -1,6 +1,5 @@
 package at.asitplus.wallet.lib.oidvci
 
-import at.asitplus.KmmResult
 import at.asitplus.catching
 import at.asitplus.openid.RequestParameters
 import at.asitplus.openid.TokenResponseParameters
@@ -14,7 +13,6 @@ import at.asitplus.wallet.lib.data.AtomicAttribute2023
 import at.asitplus.wallet.lib.data.ConstantIndex
 import at.asitplus.wallet.lib.data.ConstantIndex.CredentialRepresentation.PLAIN_JWT
 import at.asitplus.wallet.lib.data.rfc3986.toUri
-import at.asitplus.wallet.lib.jws.EncryptJweFun
 import at.asitplus.wallet.lib.oauth2.OAuth2Client
 import at.asitplus.wallet.lib.oauth2.SimpleAuthorizationService
 import at.asitplus.wallet.lib.openid.AuthenticationResponseResult
@@ -22,8 +20,6 @@ import at.asitplus.wallet.lib.openid.DummyOAuth2IssuerCredentialDataProvider
 import at.asitplus.wallet.lib.openid.DummyUserProvider
 import com.benasher44.uuid.uuid4
 import de.infix.testBalloon.framework.core.testSuite
-import io.kotest.assertions.throwables.shouldThrow
-import io.kotest.assertions.throwables.shouldThrowAny
 import io.kotest.matchers.collections.shouldBeSingleton
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -34,7 +30,7 @@ val OidvciEncryptionAlgorithmsTest by testSuite {
     withFixtureGenerator {
         object {
             val issuerEnc = JweEncryption.A128CBC_HS256
-            val walletEnc = JweEncryption.A128GCM
+            val walletEnc = JweEncryption.A128GCM // will not be used, as wallet selects from issuer's algorithm!
             val authorizationService = SimpleAuthorizationService(
                 strategy = CredentialAuthorizationServiceStrategy(setOf(ConstantIndex.AtomicAttribute2023)),
             )
@@ -56,7 +52,7 @@ val OidvciEncryptionAlgorithmsTest by testSuite {
                 encryptionService = WalletEncryptionService(
                     requestResponseEncryption = true, // this is important
                     requireRequestEncryption = true, // this is important
-                    supportedJweEncryptionAlgorithm = walletEnc
+                    fallbackJweEncryptionAlgorithm = walletEnc
                 )
             )
             val oauth2Client = OAuth2Client()
@@ -104,7 +100,7 @@ val OidvciEncryptionAlgorithmsTest by testSuite {
                 credentialDataProvider = DummyOAuth2IssuerCredentialDataProvider,
             ).getOrThrow().apply {
                 shouldBeInstanceOf<CredentialIssuer.CredentialResponse.Encrypted>().apply {
-                    response.header.encryption shouldBe it.walletEnc
+                    response.header.encryption shouldBe it.issuerEnc
                 }
                 it.client.parseCredentialResponse(this, PLAIN_JWT, ConstantIndex.AtomicAttribute2023)
                     .getOrThrow().first().shouldBeInstanceOf<Holder.StoreCredentialInput.Vc>().apply {
@@ -129,11 +125,15 @@ val OidvciEncryptionAlgorithmsTest by testSuite {
                     credentialFormat = credentialFormat,
                     clientNonce = it.issuer.nonceWithDpopNonce().getOrThrow().response.clientNonce,
                 ).getOrThrow().shouldBeSingleton().first()
-                    .shouldBeInstanceOf<WalletService.CredentialRequest.Plain>(),
+                    .shouldBeInstanceOf<WalletService.CredentialRequest.Plain>().apply {
+                        request.credentialResponseEncryption.shouldNotBeNull().apply {
+                            jweEncryption shouldBe it.issuerEnc
+                        }
+                    },
                 credentialDataProvider = DummyOAuth2IssuerCredentialDataProvider,
             ).getOrThrow().apply {
                 shouldBeInstanceOf<CredentialIssuer.CredentialResponse.Encrypted>().apply {
-                    response.header.encryption shouldBe it.walletEnc
+                    response.header.encryption shouldBe it.issuerEnc
                 }
                 it.client.parseCredentialResponse(this, PLAIN_JWT, ConstantIndex.AtomicAttribute2023)
                     .getOrThrow().first().shouldBeInstanceOf<Holder.StoreCredentialInput.Vc>().apply {

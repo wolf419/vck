@@ -40,8 +40,10 @@ class WalletEncryptionService(
     private val encryptCredentialRequest: EncryptJweFun = EncryptJwe(EphemeralKeyWithoutCert()),
     /** Algorithms to indicate support for credential response encryption. */
     private val supportedJweAlgorithm: JweAlgorithm = JweAlgorithm.ECDH_ES,
-    /** Algorithms to indicate support for credential response encryption. */
+    @Deprecated("Use fallbackJweEncryptionAlgorithm instead.")
     private val supportedJweEncryptionAlgorithm: JweEncryption = JweEncryption.A256GCM,
+    /** Algorithm to fallback to for credential response encryption. */
+    private val fallbackJweEncryptionAlgorithm: JweEncryption = JweEncryption.A256GCM,
     /** Key to offer for credential response encryption. */
     private val decryptionKeyMaterial: KeyMaterial = EphemeralKeyWithoutCert(),
     /** Used to decrypt the credential response sent by the issuer. */
@@ -72,9 +74,9 @@ class WalletEncryptionService(
             ?: throw InvalidEncryptionParameters("No recipient key found in metadata")
         val jweAlg = metadata.credentialRequestEncryption.selectAlgorithm()
             ?: (recipientKey.algorithm as? JweAlgorithm?)
-            ?: supportedJweAlgorithm
+            ?: throw InvalidEncryptionParameters("No supported algorithm found in metadata")
         val jweEnc = metadata.credentialRequestEncryption.selectEncryption()
-            ?: supportedJweEncryptionAlgorithm
+            ?: fallbackJweEncryptionAlgorithm
         encryptCredentialRequest(
             header = JweHeader(
                 algorithm = jweAlg,
@@ -88,31 +90,34 @@ class WalletEncryptionService(
         }
     }
 
-    /** Fallback to [supportedJweAlgorithm] and let's see if issuer can decrypt it. */
+    /** Try to find a matching algorithm from issuer's metadata. */
     private fun SupportedAlgorithmsContainer?.selectAlgorithm(): JweAlgorithm? =
         this?.supportedAlgorithms?.filterIsInstance<JweAlgorithm>()?.firstOrNull {
             it == supportedJweAlgorithm
         }
 
-    /** Fallback to [supportedJweEncryptionAlgorithm] and let's see if issuer can decrypt it. */
+    /** Try to find a matching encryption algorithm from issuer's metadata. */
     private fun SupportedAlgorithmsContainer?.selectEncryption(): JweEncryption? =
         this?.supportedEncryptionAlgorithms?.firstOrNull {
-            it == supportedJweEncryptionAlgorithm
+            it == fallbackJweEncryptionAlgorithm
         } ?: this?.supportedEncryptionAlgorithms?.firstOrNull {
             it.algorithm.requiresNonce() && it.algorithm.isAuthenticated()
         }
 
     /** Appends credential response encryption information to the request. */
-    internal fun credentialResponseEncryption(metadata: IssuerMetadata): CredentialResponseEncryption? =
-        if (metadata.credentialResponseEncryption != null)
-            if (requestResponseEncryption || metadata.credentialResponseEncryption?.encryptionRequired == true) {
-                CredentialResponseEncryption(
-                    jsonWebKey = decryptionKeyMaterial.jsonWebKey.forEncryption(),
-                    jweAlgorithm = supportedJweAlgorithm,
-                    jweEncryptionString = supportedJweEncryptionAlgorithm.identifier,
-                )
-            } else null
-        else null
+    internal fun credentialResponseEncryption(
+        metadata: IssuerMetadata
+    ): CredentialResponseEncryption? = if (metadata.credentialResponseEncryption != null)
+        if (requestResponseEncryption || metadata.credentialResponseEncryption?.encryptionRequired == true) {
+            CredentialResponseEncryption(
+                jsonWebKey = decryptionKeyMaterial.jsonWebKey.forEncryption(),
+                jweAlgorithm = metadata.credentialResponseEncryption?.selectAlgorithm()
+                    ?: supportedJweAlgorithm,
+                jweEncryption = metadata.credentialResponseEncryption?.selectEncryption()
+                    ?: fallbackJweEncryptionAlgorithm,
+            )
+        } else null
+    else null
 
     /** Decrypts encrypted credential response from the issuer. */
     internal suspend fun decryptToCredentialResponse(

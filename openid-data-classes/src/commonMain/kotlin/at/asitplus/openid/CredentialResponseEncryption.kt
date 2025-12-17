@@ -28,4 +28,14 @@ data class CredentialResponseEncryption(
 ) {
     val jweEncryption: JweEncryption? =
         JweEncryption.entries.firstOrNull { it.identifier == jweEncryptionString }
+
+    constructor(
+        jsonWebKey: JsonWebKey,
+        jweAlgorithm: JweAlgorithm,
+        jweEncryption: JweEncryption,
+    ) : this(
+        jsonWebKey = jsonWebKey,
+        jweAlgorithm = jweAlgorithm,
+        jweEncryptionString = jweEncryption.identifier
+    )
 }
