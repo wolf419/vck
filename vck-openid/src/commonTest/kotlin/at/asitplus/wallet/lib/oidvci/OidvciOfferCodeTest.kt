@@ -5,11 +5,11 @@ import at.asitplus.openid.AuthorizationDetails
 import at.asitplus.openid.CredentialOffer
 import at.asitplus.openid.RequestParameters
 import at.asitplus.openid.TokenResponseParameters
-import at.asitplus.testballoon.invoke
 import at.asitplus.testballoon.withFixtureGenerator
 import at.asitplus.wallet.lib.agent.IssuerAgent
 import at.asitplus.wallet.lib.agent.RandomSource
 import at.asitplus.wallet.lib.data.ConstantIndex.AtomicAttribute2023
+import at.asitplus.wallet.lib.data.ConstantIndex.CredentialRepresentation.PLAIN_JWT
 import at.asitplus.wallet.lib.data.rfc3986.toUri
 import at.asitplus.wallet.lib.oauth2.OAuth2Client
 import at.asitplus.wallet.lib.oauth2.SimpleAuthorizationService
@@ -20,6 +20,7 @@ import at.asitplus.wallet.mdl.MobileDrivingLicenceScheme
 import com.benasher44.uuid.uuid4
 import de.infix.testBalloon.framework.core.testSuite
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.collections.shouldBeSingleton
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -28,12 +29,11 @@ val OidvciOfferCodeTest by testSuite {
 
     withFixtureGenerator {
         object {
+            val mapper = DefaultCredentialSchemeMapper()
             val authorizationService = SimpleAuthorizationService(
                 strategy = CredentialAuthorizationServiceStrategy(
-                    setOf(
-                        AtomicAttribute2023,
-                        MobileDrivingLicenceScheme
-                    )
+                    credentialSchemes = setOf(AtomicAttribute2023, MobileDrivingLicenceScheme),
+                    mapper = mapper,
                 ),
             )
             val issuer = CredentialIssuer(
@@ -43,6 +43,7 @@ val OidvciOfferCodeTest by testSuite {
                     randomSource = RandomSource.Default
                 ),
                 credentialSchemes = setOf(AtomicAttribute2023, MobileDrivingLicenceScheme),
+                credentialSchemeMapper = mapper,
             )
             val client = WalletService()
             val oauth2Client = OAuth2Client()
@@ -100,23 +101,52 @@ val OidvciOfferCodeTest by testSuite {
     } - {
 
         test("process with code after credential offer, and scope for one credential") {
-            val credentialOffer = it.authorizationService.credentialOfferWithAuthorizationCode(it.issuer.publicContext)
-            val credentialIdToRequest = credentialOffer.configurationIds.first()
-            val credentialFormat =
-                it.issuer.metadata.supportedCredentialConfigurations!![credentialIdToRequest].shouldNotBeNull()
+            val credentialIdToRequest = it.mapper.toCredentialIdentifier(AtomicAttribute2023, PLAIN_JWT)
+            val credentialOffer = it.authorizationService.credentialOfferWithAuthorizationCode(
+                credentialIssuer = it.issuer.publicContext,
+                configurationIds = setOf(credentialIdToRequest)
+            )
+            val credentialFormat = it.issuer.metadata.supportedCredentialConfigurations!![credentialIdToRequest]
+                .shouldNotBeNull()
             val token = it.getToken(credentialOffer, credentialFormat.scope.shouldNotBeNull())
             val clientNonce = it.issuer.nonceWithDpopNonce().getOrThrow().response.clientNonce
 
-            val credentialRequest = it.client.createCredential(
+            val request = it.client.createCredential(
                 tokenResponse = token,
                 metadata = it.issuer.metadata,
                 credentialFormat = credentialFormat,
                 clientNonce = clientNonce,
-            ).getOrThrow()
+            ).getOrThrow().shouldBeSingleton().first()
 
             val credential = it.issuer.credential(
                 authorizationHeader = token.toHttpHeaderValue(),
-                params = credentialRequest.first(),
+                params = request,
+                credentialDataProvider = DummyOAuth2IssuerCredentialDataProvider,
+            ).getOrThrow()
+                .shouldBeInstanceOf<CredentialIssuer.CredentialResponse.Plain>()
+                .response
+            credential.credentials.shouldNotBeEmpty()
+                .first().credentialString.shouldNotBeNull()
+        }
+
+        test("process with code after credential offer, and scope for all credentials") {
+            val credentialOffer = it.authorizationService.credentialOfferWithAuthorizationCode(it.issuer.publicContext)
+            val credentialIdToRequest = credentialOffer.configurationIds.first()
+            val credentialFormat = it.issuer.metadata.supportedCredentialConfigurations!![credentialIdToRequest]
+                .shouldNotBeNull()
+            val token = it.getToken(credentialOffer, credentialFormat.scope.shouldNotBeNull())
+            val clientNonce = it.issuer.nonceWithDpopNonce().getOrThrow().response.clientNonce
+
+            val request = it.client.createCredential(
+                tokenResponse = token,
+                metadata = it.issuer.metadata,
+                credentialFormat = credentialFormat,
+                clientNonce = clientNonce,
+            ).getOrThrow().shouldBeSingleton().first()
+
+            val credential = it.issuer.credential(
+                authorizationHeader = token.toHttpHeaderValue(),
+                params = request,
                 credentialDataProvider = DummyOAuth2IssuerCredentialDataProvider,
             ).getOrThrow()
                 .shouldBeInstanceOf<CredentialIssuer.CredentialResponse.Plain>()
@@ -157,16 +187,16 @@ val OidvciOfferCodeTest by testSuite {
 
             val clientNonce = it.issuer.nonceWithDpopNonce().getOrThrow().response.clientNonce
 
-            val credentialRequest = it.client.createCredential(
+            val request = it.client.createCredential(
                 tokenResponse = token,
                 metadata = it.issuer.metadata,
                 credentialFormat = credentialFormat,
                 clientNonce = clientNonce,
-            ).getOrThrow()
+            ).getOrThrow().shouldBeSingleton().first()
 
             val credential = it.issuer.credential(
                 authorizationHeader = token.toHttpHeaderValue(),
-                params = credentialRequest.first(),
+                params = request,
                 credentialDataProvider = DummyOAuth2IssuerCredentialDataProvider,
             ).getOrThrow()
                 .shouldBeInstanceOf<CredentialIssuer.CredentialResponse.Plain>()

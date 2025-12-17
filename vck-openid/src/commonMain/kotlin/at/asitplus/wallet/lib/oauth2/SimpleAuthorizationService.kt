@@ -225,7 +225,6 @@ class SimpleAuthorizationService(
         )
     )
 
-
     /**
      * Pushed authorization request endpoint as defined in [RFC 9126](https://www.rfc-editor.org/rfc/rfc9126.html).
      * Clients send their authorization request as HTTP `POST` with `application/x-www-form-urlencoded` to the AS.

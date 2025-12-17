@@ -23,6 +23,7 @@ import com.benasher44.uuid.uuid4
 import de.infix.testBalloon.framework.core.testSuite
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.assertions.throwables.shouldThrowAny
+import io.kotest.matchers.collections.shouldBeSingleton
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.types.shouldBeInstanceOf
 
@@ -83,24 +84,23 @@ val OidvciEncryptionTest by testSuite {
             val scope = credentialFormat.scope.shouldNotBeNull()
             val token = it.getToken(scope)
 
-            it.client.createCredential(
-                tokenResponse = token,
-                metadata = it.issuer.metadata,
-                credentialFormat = credentialFormat,
-                clientNonce = it.issuer.nonceWithDpopNonce().getOrThrow().response.clientNonce,
-            ).getOrThrow().forEach { request ->
-                request.shouldBeInstanceOf<WalletService.CredentialRequest.Encrypted>()
-                it.issuer.credential(
-                    authorizationHeader = token.toHttpHeaderValue(),
-                    params = request,
-                    credentialDataProvider = DummyOAuth2IssuerCredentialDataProvider,
-                ).getOrThrow().let { credential ->
-                    it.client.parseCredentialResponse(credential, PLAIN_JWT, ConstantIndex.AtomicAttribute2023)
-                        .getOrThrow().first().shouldBeInstanceOf<Holder.StoreCredentialInput.Vc>().apply {
-                            signedVcJws.payload.vc.credentialSubject.shouldBeInstanceOf<AtomicAttribute2023>()
-                        }
-                }
+            it.issuer.credential(
+                authorizationHeader = token.toHttpHeaderValue(),
+                params = it.client.createCredential(
+                    tokenResponse = token,
+                    metadata = it.issuer.metadata,
+                    credentialFormat = credentialFormat,
+                    clientNonce = it.issuer.nonceWithDpopNonce().getOrThrow().response.clientNonce,
+                ).getOrThrow().shouldBeSingleton().first()
+                    .shouldBeInstanceOf<WalletService.CredentialRequest.Encrypted>(),
+                credentialDataProvider = DummyOAuth2IssuerCredentialDataProvider,
+            ).getOrThrow().let { credential ->
+                it.client.parseCredentialResponse(credential, PLAIN_JWT, ConstantIndex.AtomicAttribute2023)
+                    .getOrThrow().first().shouldBeInstanceOf<Holder.StoreCredentialInput.Vc>().apply {
+                        signedVcJws.payload.vc.credentialSubject.shouldBeInstanceOf<AtomicAttribute2023>()
+                    }
             }
+
         }
 
         test("wallet does not encrypt credential request and decrypts credential response") {
@@ -110,23 +110,22 @@ val OidvciEncryptionTest by testSuite {
             val scope = credentialFormat.scope.shouldNotBeNull()
             val token = it.getToken(scope)
 
-            it.client.createCredential(
-                tokenResponse = token,
-                metadata = it.issuer.metadata,
-                credentialFormat = credentialFormat,
-                clientNonce = it.issuer.nonceWithDpopNonce().getOrThrow().response.clientNonce,
-            ).getOrThrow().forEach { request ->
-                it.issuer.credential(
-                    authorizationHeader = token.toHttpHeaderValue(),
-                    params = request,
-                    credentialDataProvider = DummyOAuth2IssuerCredentialDataProvider,
-                ).getOrThrow().let { credential ->
-                    it.client.parseCredentialResponse(credential, PLAIN_JWT, ConstantIndex.AtomicAttribute2023)
-                        .getOrThrow().first().shouldBeInstanceOf<Holder.StoreCredentialInput.Vc>().apply {
-                            signedVcJws.payload.vc.credentialSubject.shouldBeInstanceOf<AtomicAttribute2023>()
-                        }
-                }
+            it.issuer.credential(
+                authorizationHeader = token.toHttpHeaderValue(),
+                params = it.client.createCredential(
+                    tokenResponse = token,
+                    metadata = it.issuer.metadata,
+                    credentialFormat = credentialFormat,
+                    clientNonce = it.issuer.nonceWithDpopNonce().getOrThrow().response.clientNonce,
+                ).getOrThrow().shouldBeSingleton().first(),
+                credentialDataProvider = DummyOAuth2IssuerCredentialDataProvider,
+            ).getOrThrow().let { credential ->
+                it.client.parseCredentialResponse(credential, PLAIN_JWT, ConstantIndex.AtomicAttribute2023)
+                    .getOrThrow().first().shouldBeInstanceOf<Holder.StoreCredentialInput.Vc>().apply {
+                        signedVcJws.payload.vc.credentialSubject.shouldBeInstanceOf<AtomicAttribute2023>()
+                    }
             }
+
         }
 
         test("wallet does not encrypt credential request but issuer requires this") {
@@ -151,20 +150,21 @@ val OidvciEncryptionTest by testSuite {
             val scope = credentialFormat.scope.shouldNotBeNull()
             val token = it.getToken(scope)
 
-            it.client.createCredential(
+            val request = it.client.createCredential(
                 tokenResponse = token,
-                metadata = it.issuer.metadata.copy(credentialRequestEncryption = null), // trick wallet into not encrypting
+                // trick wallet into not encrypting
+                metadata = it.issuer.metadata.copy(credentialRequestEncryption = null),
                 credentialFormat = credentialFormat,
                 clientNonce = it.issuer.nonceWithDpopNonce().getOrThrow().response.clientNonce,
-            ).getOrThrow().forEach { request ->
-                shouldThrow<OAuth2Exception.InvalidEncryptionParameters> {
-                    it.issuer.credential(
-                        authorizationHeader = token.toHttpHeaderValue(),
-                        params = request,
-                        credentialDataProvider = DummyOAuth2IssuerCredentialDataProvider,
-                    ).getOrThrow()
-                }
+            ).getOrThrow().shouldBeSingleton().first()
+            shouldThrow<OAuth2Exception.InvalidEncryptionParameters> {
+                it.issuer.credential(
+                    authorizationHeader = token.toHttpHeaderValue(),
+                    params = request,
+                    credentialDataProvider = DummyOAuth2IssuerCredentialDataProvider,
+                ).getOrThrow()
             }
+
         }
 
         test("issuer fails to encrypt response") {
@@ -189,19 +189,18 @@ val OidvciEncryptionTest by testSuite {
             val scope = credentialFormat.scope.shouldNotBeNull()
             val token = it.getToken(scope)
 
-            it.client.createCredential(
+            val request = it.client.createCredential(
                 tokenResponse = token,
                 metadata = it.issuer.metadata,
                 credentialFormat = credentialFormat,
                 clientNonce = it.issuer.nonceWithDpopNonce().getOrThrow().response.clientNonce,
-            ).getOrThrow().forEach { request ->
-                shouldThrowAny {
-                    it.issuer.credential(
-                        authorizationHeader = token.toHttpHeaderValue(),
-                        params = request,
-                        credentialDataProvider = DummyOAuth2IssuerCredentialDataProvider,
-                    ).getOrThrow()
-                }
+            ).getOrThrow().shouldBeSingleton().first()
+            shouldThrowAny {
+                it.issuer.credential(
+                    authorizationHeader = token.toHttpHeaderValue(),
+                    params = request,
+                    credentialDataProvider = DummyOAuth2IssuerCredentialDataProvider,
+                ).getOrThrow()
             }
         }
     }

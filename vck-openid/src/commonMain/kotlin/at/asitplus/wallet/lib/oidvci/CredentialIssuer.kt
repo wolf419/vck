@@ -23,8 +23,6 @@ import at.asitplus.wallet.lib.jws.JwsHeaderCertOrJwk
 import at.asitplus.wallet.lib.jws.SignJwt
 import at.asitplus.wallet.lib.jws.SignJwtFun
 import at.asitplus.wallet.lib.oauth2.RequestInfo
-import at.asitplus.wallet.lib.oidvci.CredentialSchemeMapping.decodeFromCredentialIdentifier
-import at.asitplus.wallet.lib.oidvci.CredentialSchemeMapping.toSupportedCredentialFormat
 import at.asitplus.wallet.lib.oidvci.OAuth2Exception.*
 import io.github.aakira.napier.Napier
 
@@ -69,6 +67,8 @@ class CredentialIssuer(
     private val signMetadata: SignJwtFun<IssuerMetadata> = SignJwt(EphemeralKeyWithoutCert(), JwsHeaderCertOrJwk()),
     /** Handles credential request decryption and credential response encryption. */
     private val encryptionService: IssuerEncryptionService = IssuerEncryptionService(),
+    /** Maps from/to strings in metadata from/to credential schemes. */
+    private val credentialSchemeMapper: CredentialSchemeMapper = DefaultCredentialSchemeMapper(),
 ) {
 
     sealed interface CredentialResponse {
@@ -86,7 +86,7 @@ class CredentialIssuer(
     }
 
     private val supportedCredentialConfigurations = credentialSchemes
-        .flatMap { it.toSupportedCredentialFormat().entries }
+        .flatMap { credentialSchemeMapper.map(it).entries }
         .associate {
             it.key to it.value
                 .withSupportedSigningAlgorithms(cryptoAlgorithms.toSet())
@@ -298,7 +298,9 @@ class CredentialIssuer(
                 throw InvalidCredentialRequest("credential_configuration_id expected to be set")
             if (credentialIdentifier != null)
                 throw InvalidCredentialRequest("credential_identifier must not be set when credential_configuration_id is set")
-            if (!it.scope.contains(credentialConfigurationId!!))
+            val configurationScope = metadata.supportedCredentialConfigurations?.get(credentialConfigurationId!!)?.scope
+                ?: throw InvalidCredentialRequest("credential_configuration_id $credentialConfigurationId not supported")
+            if (!it.scope.contains(configurationScope))
                 throw InvalidToken("credential_configuration_id $credentialConfigurationId expected to be in $it")
         } else {
             throw InvalidToken("Neither scope nor authorization details stored for access token")
@@ -309,7 +311,7 @@ class CredentialIssuer(
     private fun CredentialRequestParameters.extractCredentialRepresentation()
             : Pair<CredentialScheme, ConstantIndex.CredentialRepresentation> =
         credentialIdentifier?.let {
-            decodeFromCredentialIdentifier(it)
+            credentialSchemeMapper.decodeFromCredentialIdentifier(it)
                 ?: throw UnknownCredentialIdentifier(it)
         } ?: credentialConfigurationId?.let {
             extractFromCredentialConfigurationId(it)
@@ -320,7 +322,7 @@ class CredentialIssuer(
         credentialConfigurationId: String,
     ): Pair<CredentialScheme, ConstantIndex.CredentialRepresentation>? =
         supportedCredentialConfigurations[credentialConfigurationId]?.let {
-            decodeFromCredentialIdentifier(credentialConfigurationId)
+            credentialSchemeMapper.decodeFromCredentialIdentifier(credentialConfigurationId)
         }
 
 }

@@ -5,6 +5,7 @@ Release 5.11.0 (unreleased):
  - Add `IdentifierList` and `IdentifierListInfo` and related classes
  - OpenID for Verifiable Credential Issuance:
    - In `SimpleAuthorizationService` add parameter `configurationIds` to method `credentialOfferWithAuthorizationCode`
+   - Support different supported credential formats having the same scope value (as this is covered by the spec)
 
 Release 5.10.1:
  - Proximity presentations:

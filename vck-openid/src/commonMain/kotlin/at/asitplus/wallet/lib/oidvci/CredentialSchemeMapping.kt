@@ -2,7 +2,8 @@ package at.asitplus.wallet.lib.oidvci
 
 import at.asitplus.openid.ClaimDescription
 import at.asitplus.openid.CredentialFormatEnum
-import at.asitplus.openid.CredentialSubjectMetadataSingle
+import at.asitplus.openid.CredentialFormatEnum.DC_SD_JWT
+import at.asitplus.openid.CredentialFormatEnum.JWT_VC
 import at.asitplus.openid.OpenIdConstants.BINDING_METHOD_COSE_KEY
 import at.asitplus.openid.OpenIdConstants.BINDING_METHOD_JWK
 import at.asitplus.openid.OpenIdConstants.URN_TYPE_JWK_THUMBPRINT
@@ -15,8 +16,34 @@ import at.asitplus.wallet.lib.data.ConstantIndex.supportsIso
 import at.asitplus.wallet.lib.data.ConstantIndex.supportsSdJwt
 import at.asitplus.wallet.lib.data.ConstantIndex.supportsVcJwt
 import at.asitplus.wallet.lib.data.VcDataModelConstants
-import at.asitplus.wallet.lib.oidvci.CredentialSchemeMapping.decodeFromCredentialIdentifier
-import at.asitplus.wallet.lib.oidvci.CredentialSchemeMapping.encodeToCredentialIdentifier
+
+object CredentialSchemeMapping {
+
+    @Suppress("DEPRECATION")
+    @Deprecated("Use instance of CredentialSchemeMapper instead")
+    fun CredentialScheme.toSupportedCredentialFormat(): Map<String, SupportedCredentialFormat> =
+        DefaultCredentialSchemeMapper().map(this)
+
+    @Suppress("DEPRECATION")
+    @Deprecated("Should not be used at all, need to specify representation for CredentialSchemeMapper")
+    fun CredentialScheme.toCredentialIdentifier() = listOfNotNull(
+        if (supportsIso) isoNamespace!! else null,
+        if (supportsVcJwt) encodeToCredentialIdentifier(vcType!!, JWT_VC) else null,
+        if (supportsSdJwt) encodeToCredentialIdentifier(sdJwtType!!, DC_SD_JWT) else null
+    )
+
+    @Deprecated("Use instance of CredentialSchemeMapper instead")
+    fun CredentialScheme.toCredentialIdentifier(rep: CredentialRepresentation) =
+        DefaultCredentialSchemeMapper().toCredentialIdentifier(this, rep)
+
+    @Deprecated("Use instance of CredentialSchemeMapper instead")
+    fun encodeToCredentialIdentifier(type: String, format: CredentialFormatEnum): String =
+        DefaultCredentialSchemeMapper().encodeToCredentialIdentifier(type, format)
+
+    @Deprecated("Use instance of CredentialSchemeMapper instead")
+    fun decodeFromCredentialIdentifier(input: String): Pair<CredentialScheme, CredentialRepresentation>? =
+        DefaultCredentialSchemeMapper().decodeFromCredentialIdentifier(input)
+}
 
 /**
  * Defines mapping of [CredentialScheme] to identifiers used in OID4VCI in [CredentialIssuer]
@@ -25,68 +52,20 @@ import at.asitplus.wallet.lib.oidvci.CredentialSchemeMapping.encodeToCredentialI
  * and [CredentialAuthorizationServiceStrategy]
  * (in [at.asitplus.openid.OpenIdAuthorizationDetails.credentialConfigurationId]).
  */
-object CredentialSchemeMapping {
+interface CredentialSchemeMapper {
 
-    @Suppress("DEPRECATION")
-    fun CredentialScheme.toSupportedCredentialFormat(): Map<String, SupportedCredentialFormat> {
-        val iso = if (supportsIso) {
-            with(isoNamespace!!) {
-                this to SupportedCredentialFormat.forIsoMdoc(
-                    format = CredentialFormatEnum.MSO_MDOC,
-                    scope = this,
-                    docType = isoDocType!!,
-                    supportedBindingMethods = setOf(BINDING_METHOD_JWK, BINDING_METHOD_COSE_KEY),
-                    isoClaims = claimNames.map {
-                        ClaimDescription(path = listOf(isoNamespace!!) + it.split("."))
-                    }.toSet()
-                )
-            }
-        } else null
-        val jwtVc = if (supportsVcJwt) {
-            with(encodeToCredentialIdentifier(vcType!!, CredentialFormatEnum.JWT_VC)) {
-                this to SupportedCredentialFormat.forVcJwt(
-                    format = CredentialFormatEnum.JWT_VC,
-                    scope = this,
-                    credentialDefinition = SupportedCredentialFormatDefinition(
-                        types = setOf(VcDataModelConstants.VERIFIABLE_CREDENTIAL, vcType!!),
-                    ),
-                    supportedBindingMethods = setOf(BINDING_METHOD_JWK, URN_TYPE_JWK_THUMBPRINT),
-                    vcJwtClaims = claimNames.map {
-                        ClaimDescription(path = it.split("."))
-                    }.toSet()
-                )
-            }
-        } else null
-        // Uses "dc+sd-jwt", supported since SD-JWT VC draft 06
-        val sdJwt = if (supportsSdJwt) {
-            with(encodeToCredentialIdentifier(sdJwtType!!, CredentialFormatEnum.DC_SD_JWT)) {
-                this to SupportedCredentialFormat.forSdJwt(
-                    format = CredentialFormatEnum.DC_SD_JWT,
-                    scope = this,
-                    sdJwtVcType = sdJwtType!!,
-                    supportedBindingMethods = setOf(BINDING_METHOD_JWK, URN_TYPE_JWK_THUMBPRINT),
-                    sdJwtClaims = claimNames.map {
-                        ClaimDescription(path = it.split("."))
-                    }.toSet()
-                )
-            }
-        } else null
-        return listOfNotNull(iso, jwtVc, sdJwt).toMap()
-    }
+    /**
+     * Maps the [scheme] to a map of credential identifiers (see [encodeToCredentialIdentifier])
+     * to [SupportedCredentialFormat]s, for use in credential issuer's metadata (see
+     * [at.asitplus.openid.IssuerMetadata.supportedCredentialConfigurations])
+     */
+    fun map(scheme: CredentialScheme): Map<String, SupportedCredentialFormat>
 
-    @Suppress("DEPRECATION")
-    fun CredentialScheme.toCredentialIdentifier() = listOfNotNull(
-        if (supportsIso) isoNamespace!! else null,
-        if (supportsVcJwt) encodeToCredentialIdentifier(vcType!!, CredentialFormatEnum.JWT_VC) else null,
-        if (supportsSdJwt) encodeToCredentialIdentifier(sdJwtType!!, CredentialFormatEnum.DC_SD_JWT) else null
-    )
-
-    @Suppress("DEPRECATION")
-    fun CredentialScheme.toCredentialIdentifier(rep: CredentialRepresentation) = when (rep) {
-        CredentialRepresentation.PLAIN_JWT -> encodeToCredentialIdentifier(vcType!!, CredentialFormatEnum.JWT_VC)
-        CredentialRepresentation.SD_JWT -> encodeToCredentialIdentifier(sdJwtType!!, CredentialFormatEnum.DC_SD_JWT)
-        CredentialRepresentation.ISO_MDOC -> isoNamespace!!
-    }
+    /**
+     * Encodes the [scheme] to a unique identifier,
+     * that may be used in [CredentialIssuer.supportedCredentialConfigurations].
+     */
+    fun toCredentialIdentifier(scheme: CredentialScheme, rep: CredentialRepresentation): String
 
     /**
      * Reverse functionality of [decodeFromCredentialIdentifier],
@@ -94,8 +73,7 @@ object CredentialSchemeMapping {
      * e.g. from [at.asitplus.wallet.lib.data.ConstantIndex.AtomicAttribute2023] and [CredentialFormatEnum.JWT_VC] to
      * `AtomicAttribute2023#jwt_vc_json`
      */
-    fun encodeToCredentialIdentifier(type: String, format: CredentialFormatEnum) =
-        "${type.replace(" ", "_")}#${format.text}"
+    fun encodeToCredentialIdentifier(type: String, format: CredentialFormatEnum): String
 
     /**
      * Reverse functionality of [encodeToCredentialIdentifier], which can also handle ISO namespaces,
@@ -105,7 +83,75 @@ object CredentialSchemeMapping {
      *
      * @return null if this scheme is not registered
      */
-    fun decodeFromCredentialIdentifier(input: String): Pair<CredentialScheme, CredentialRepresentation>? {
+    fun decodeFromCredentialIdentifier(input: String): Pair<CredentialScheme, CredentialRepresentation>?
+}
+
+class DefaultCredentialSchemeMapper : CredentialSchemeMapper {
+
+    override fun map(scheme: CredentialScheme): Map<String, SupportedCredentialFormat> {
+        val iso = with(scheme) {
+            if (supportsIso) {
+                with(isoNamespace!!) {
+                    this to SupportedCredentialFormat.forIsoMdoc(
+                        format = CredentialFormatEnum.MSO_MDOC,
+                        scope = this,
+                        docType = isoDocType!!,
+                        supportedBindingMethods = setOf(BINDING_METHOD_JWK, BINDING_METHOD_COSE_KEY),
+                        isoClaims = claimNames.map {
+                            ClaimDescription(path = listOf(isoNamespace!!) + it.split("."))
+                        }.toSet()
+                    )
+                }
+            } else null
+        }
+        val jwtVc = with(scheme) {
+            if (supportsVcJwt) {
+                with(encodeToCredentialIdentifier(vcType!!, JWT_VC)) {
+                    this to SupportedCredentialFormat.forVcJwt(
+                        format = JWT_VC,
+                        scope = this,
+                        credentialDefinition = SupportedCredentialFormatDefinition(
+                            types = setOf(VcDataModelConstants.VERIFIABLE_CREDENTIAL, vcType!!),
+                        ),
+                        supportedBindingMethods = setOf(BINDING_METHOD_JWK, URN_TYPE_JWK_THUMBPRINT),
+                        vcJwtClaims = claimNames.map {
+                            ClaimDescription(path = it.split("."))
+                        }.toSet()
+                    )
+                }
+            } else null
+        }
+        val sdJwt = with(scheme) {
+            if (supportsSdJwt) {
+                with(encodeToCredentialIdentifier(sdJwtType!!, DC_SD_JWT)) {
+                    this to SupportedCredentialFormat.forSdJwt(
+                        format = DC_SD_JWT,
+                        scope = this,
+                        sdJwtVcType = sdJwtType!!,
+                        supportedBindingMethods = setOf(BINDING_METHOD_JWK, URN_TYPE_JWK_THUMBPRINT),
+                        sdJwtClaims = claimNames.map {
+                            ClaimDescription(path = it.split("."))
+                        }.toSet()
+                    )
+                }
+            } else null
+        }
+        return listOfNotNull(iso, jwtVc, sdJwt).toMap()
+    }
+
+    override fun toCredentialIdentifier(
+        scheme: CredentialScheme,
+        rep: CredentialRepresentation
+    ) = when (rep) {
+        CredentialRepresentation.PLAIN_JWT -> encodeToCredentialIdentifier(scheme.vcType!!, JWT_VC)
+        CredentialRepresentation.SD_JWT -> encodeToCredentialIdentifier(scheme.sdJwtType!!, DC_SD_JWT)
+        CredentialRepresentation.ISO_MDOC -> scheme.isoNamespace!!
+    }
+
+    override fun encodeToCredentialIdentifier(type: String, format: CredentialFormatEnum): String =
+        "${type.replace(" ", "_")}#${format.text}"
+
+    override fun decodeFromCredentialIdentifier(input: String): Pair<CredentialScheme, CredentialRepresentation>? =
         if (input.contains("#")) {
             val vcTypeOrSdJwtType = input.substringBeforeLast("#")
             val credentialScheme = AttributeIndex.resolveSdJwtAttributeType(vcTypeOrSdJwtType)
@@ -115,12 +161,10 @@ object CredentialSchemeMapping {
                 ?: return null
             val format = CredentialFormatEnum.parse(input.substringAfterLast("#"))
                 ?: return null
-            return Pair(credentialScheme, format.toRepresentation())
+            Pair(credentialScheme, format.toRepresentation())
         } else {
-            return AttributeIndex.resolveIsoNamespace(input)
+            AttributeIndex.resolveIsoNamespace(input)
                 ?.let { Pair(it, CredentialRepresentation.ISO_MDOC) }
         }
-    }
-
 
 }

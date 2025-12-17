@@ -4,7 +4,6 @@ import at.asitplus.openid.AuthorizationDetails
 import at.asitplus.openid.OpenIdAuthorizationDetails
 import at.asitplus.wallet.lib.data.ConstantIndex
 import at.asitplus.wallet.lib.oauth2.AuthorizationServiceStrategy
-import at.asitplus.wallet.lib.oidvci.CredentialSchemeMapping.toSupportedCredentialFormat
 import at.asitplus.wallet.lib.oidvci.OAuth2Exception.InvalidAuthorizationDetails
 import kotlin.contracts.ExperimentalContracts
 import kotlin.contracts.contract
@@ -16,13 +15,15 @@ import kotlin.contracts.contract
 class CredentialAuthorizationServiceStrategy(
     /** List of supported schemes. */
     credentialSchemes: Set<ConstantIndex.CredentialScheme>,
+    /** Maps from/to strings in metadata from/to credential schemes. */
+    private val mapper: CredentialSchemeMapper = DefaultCredentialSchemeMapper(),
 ) : AuthorizationServiceStrategy {
 
     private val supportedCredentialSchemes = credentialSchemes
-        .flatMap { it.toSupportedCredentialFormat().entries }
+        .flatMap { mapper.map(it).entries }
         .associate { it.key to it.value }
 
-    override fun validScopes(): String = supportedCredentialSchemes.map { it.value.scope }.joinToString(" ")
+    override fun validScopes(): String = supportedCredentialSchemes.map { it.value.scope }.distinct().joinToString(" ")
 
     override fun allCredentialIdentifier(): Collection<String> = supportedCredentialSchemes.map { it.key }
 

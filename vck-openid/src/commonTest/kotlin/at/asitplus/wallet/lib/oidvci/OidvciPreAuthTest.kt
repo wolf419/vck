@@ -6,7 +6,6 @@ import at.asitplus.openid.CredentialRequestProofContainer
 import at.asitplus.openid.OpenIdAuthorizationDetails
 import at.asitplus.openid.TokenResponseParameters
 import at.asitplus.signum.indispensable.josef.JwsSigned
-import at.asitplus.testballoon.invoke
 import at.asitplus.testballoon.withFixtureGenerator
 import at.asitplus.wallet.lib.agent.IssuerAgent
 import at.asitplus.wallet.lib.agent.RandomSource
@@ -17,12 +16,12 @@ import at.asitplus.wallet.lib.data.rfc3986.toUri
 import at.asitplus.wallet.lib.data.vckJsonSerializer
 import at.asitplus.wallet.lib.oauth2.OAuth2Client
 import at.asitplus.wallet.lib.oauth2.SimpleAuthorizationService
-import at.asitplus.wallet.lib.oidvci.CredentialSchemeMapping.toCredentialIdentifier
 import at.asitplus.wallet.lib.openid.DummyOAuth2IssuerCredentialDataProvider
 import at.asitplus.wallet.lib.openid.DummyUserProvider
 import at.asitplus.wallet.mdl.MobileDrivingLicenceScheme
 import com.benasher44.uuid.uuid4
 import de.infix.testBalloon.framework.core.testSuite
+import io.kotest.matchers.collections.shouldBeSingleton
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -32,12 +31,11 @@ val OidvciPreAuthTest by testSuite {
 
     withFixtureGenerator {
         object {
+            val mapper = DefaultCredentialSchemeMapper()
             val authorizationService = SimpleAuthorizationService(
                 strategy = CredentialAuthorizationServiceStrategy(
-                    setOf(
-                        AtomicAttribute2023,
-                        MobileDrivingLicenceScheme
-                    )
+                    credentialSchemes = setOf(AtomicAttribute2023, MobileDrivingLicenceScheme),
+                    mapper = mapper,
                 ),
             )
             val issuer = CredentialIssuer(
@@ -47,6 +45,7 @@ val OidvciPreAuthTest by testSuite {
                     randomSource = RandomSource.Default
                 ),
                 credentialSchemes = setOf(AtomicAttribute2023, MobileDrivingLicenceScheme),
+                credentialSchemeMapper = mapper,
             )
             val client = WalletService()
             val oauth2Client = OAuth2Client()
@@ -61,8 +60,8 @@ val OidvciPreAuthTest by testSuite {
                     state = state,
                     authorization = OAuth2Client.AuthorizationForToken.PreAuthCode(preAuth.preAuthorizedCode),
                     authorizationDetails = client.buildAuthorizationDetails(
-                        credentialIdToRequest,
-                        issuer.metadata.authorizationServers
+                        credentialConfigurationIds = credentialIdToRequest,
+                        authorizationServers = issuer.metadata.authorizationServers
                     )
                 )
                 return authorizationService.token(tokenRequest, null).getOrThrow()
@@ -70,30 +69,30 @@ val OidvciPreAuthTest by testSuite {
         }
     } - {
         test("process with pre-authorized code, credential offer, and authorization details for one credential") {
-            val credentialOffer =
-                it.authorizationService.credentialOfferWithPreAuthnForUser(
-                    DummyUserProvider.user,
-                    it.issuer.publicContext
-                )
-            val credentialIdToRequest = AtomicAttribute2023.toCredentialIdentifier(PLAIN_JWT)
-            val credentialFormat =
-                it.issuer.metadata.supportedCredentialConfigurations!![credentialIdToRequest].shouldNotBeNull()
+            val credentialIdToRequest = it.mapper.toCredentialIdentifier(AtomicAttribute2023, PLAIN_JWT)
+            val credentialOffer = it.authorizationService.credentialOfferWithPreAuthnForUser(
+                user = DummyUserProvider.user,
+                credentialIssuer = it.issuer.publicContext,
+                configurationIds = setOf(credentialIdToRequest)
+            )
+            val credentialFormat = it.issuer.metadata.supportedCredentialConfigurations!![credentialIdToRequest]
+                .shouldNotBeNull()
 
             val token = it.getToken(credentialOffer, setOf(credentialIdToRequest))
             token.authorizationDetails.shouldNotBeNull()
                 .first().shouldBeInstanceOf<OpenIdAuthorizationDetails>()
             val clientNonce = it.issuer.nonceWithDpopNonce().getOrThrow().response.clientNonce
 
-            val credentialRequest = it.client.createCredential(
+            val request = it.client.createCredential(
                 tokenResponse = token,
                 metadata = it.issuer.metadata,
                 credentialFormat = credentialFormat,
                 clientNonce = clientNonce,
-            ).getOrThrow()
+            ).getOrThrow().shouldBeSingleton().first()
 
             val credential = it.issuer.credential(
                 authorizationHeader = token.toHttpHeaderValue(),
-                params = credentialRequest.first(),
+                params = request,
                 credentialDataProvider = DummyOAuth2IssuerCredentialDataProvider,
             ).getOrThrow()
                 .shouldBeInstanceOf<CredentialIssuer.CredentialResponse.Plain>()
@@ -104,8 +103,8 @@ val OidvciPreAuthTest by testSuite {
 
         test("process with pre-authorized code, credential offer, and authorization details for all credentials") {
             val credentialOffer = it.authorizationService.credentialOfferWithPreAuthnForUser(
-                DummyUserProvider.user,
-                it.issuer.publicContext
+                user = DummyUserProvider.user,
+                credentialIssuer = it.issuer.publicContext
             )
             val credentialIdsToRequest = credentialOffer.configurationIds
                 .shouldHaveSize(4) // Atomic Attribute in 3 representations (JWT, ISO, dc+sd-jwt), mDL in ISO
@@ -122,16 +121,14 @@ val OidvciPreAuthTest by testSuite {
                 val credentialFormat = it.issuer.metadata.supportedCredentialConfigurations
                     .shouldNotBeNull()[authnDetail.credentialIdentifiers.shouldNotBeNull().first()]
                     .shouldNotBeNull()
-                val credentialRequest = it.client.createCredential(
-                    tokenResponse = token,
-                    metadata = it.issuer.metadata,
-                    credentialFormat = credentialFormat,
-                    clientNonce = clientNonce,
-                ).getOrThrow()
-
                 it.issuer.credential(
-                    token.toHttpHeaderValue(),
-                    credentialRequest.first(),
+                    authorizationHeader = token.toHttpHeaderValue(),
+                    params = it.client.createCredential(
+                        tokenResponse = token,
+                        metadata = it.issuer.metadata,
+                        credentialFormat = credentialFormat,
+                        clientNonce = clientNonce,
+                    ).getOrThrow().first(),
                     credentialDataProvider = DummyOAuth2IssuerCredentialDataProvider,
                 ).getOrThrow()
                     .shouldBeInstanceOf<CredentialIssuer.CredentialResponse.Plain>()
@@ -143,10 +140,10 @@ val OidvciPreAuthTest by testSuite {
 
         test("process with pre-authorized code, credential offer, and scope") {
             val credentialOffer = it.authorizationService.credentialOfferWithPreAuthnForUser(
-                DummyUserProvider.user,
-                it.issuer.publicContext
+                user = DummyUserProvider.user,
+                credentialIssuer = it.issuer.publicContext
             )
-            val credentialIdToRequest = AtomicAttribute2023.toCredentialIdentifier(PLAIN_JWT)
+            val credentialIdToRequest = it.mapper.toCredentialIdentifier(AtomicAttribute2023, PLAIN_JWT)
             // OID4VCI 5.1.2 Using scope Parameter to Request Issuance of a Credential
             val supportedCredentialFormat =
                 it.issuer.metadata.supportedCredentialConfigurations?.get(credentialIdToRequest)
@@ -165,16 +162,16 @@ val OidvciPreAuthTest by testSuite {
             val token = it.authorizationService.token(tokenRequest, null).getOrThrow()
             val clientNonce = it.issuer.nonceWithDpopNonce().getOrThrow().response.clientNonce
 
-            val credentialRequest = it.client.createCredential(
+            val request = it.client.createCredential(
                 tokenResponse = token,
                 metadata = it.issuer.metadata,
                 credentialFormat = supportedCredentialFormat,
                 clientNonce = clientNonce,
-            ).getOrThrow()
+            ).getOrThrow().shouldBeSingleton().first()
 
             it.issuer.credential(
-                token.toHttpHeaderValue(),
-                credentialRequest.first(),
+                authorizationHeader = token.toHttpHeaderValue(),
+                params = request,
                 credentialDataProvider = DummyOAuth2IssuerCredentialDataProvider,
             ).getOrThrow()
                 .shouldBeInstanceOf<CredentialIssuer.CredentialResponse.Plain>()
@@ -184,12 +181,11 @@ val OidvciPreAuthTest by testSuite {
         }
 
         test("two proofs over different keys lead to two credentials") {
-            val credentialOffer =
-                it.authorizationService.credentialOfferWithPreAuthnForUser(
-                    DummyUserProvider.user,
-                    it.issuer.publicContext
-                )
-            val credentialIdToRequest = AtomicAttribute2023.toCredentialIdentifier(PLAIN_JWT)
+            val credentialOffer = it.authorizationService.credentialOfferWithPreAuthnForUser(
+                user = DummyUserProvider.user,
+                credentialIssuer = it.issuer.publicContext
+            )
+            val credentialIdToRequest = it.mapper.toCredentialIdentifier(AtomicAttribute2023, PLAIN_JWT)
 
             val token = it.getToken(credentialOffer, setOf(credentialIdToRequest))
             val credentialIdentifier = token.authorizationDetails.shouldNotBeNull()

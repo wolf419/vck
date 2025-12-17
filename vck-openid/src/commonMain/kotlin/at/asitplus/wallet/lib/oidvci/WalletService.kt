@@ -238,9 +238,9 @@ class WalletService(
         val requests = if (tokenResponse.authorizationDetails != null) {
             tokenResponse.authorizationDetails!!.toCredentialRequest()
         } else if (tokenResponse.scope != null) {
-            tokenResponse.scope!!.toCredentialRequest(metadata, credentialFormat)
+            fromScopeToCredentialRequest(tokenResponse.scope!!, metadata, credentialFormat)
         } else if (previouslyRequestedScope != null) {
-            previouslyRequestedScope.toCredentialRequest(metadata, credentialFormat)
+            fromScopeToCredentialRequest(previouslyRequestedScope, metadata, credentialFormat)
         } else {
             throw InvalidToken("Can't parse token: $tokenResponse")
         }
@@ -309,15 +309,24 @@ class WalletService(
             } else throw InvalidToken("Invalid authorization details: $it")
         }
 
-    private fun String.toCredentialRequest(
+    private fun fromScopeToCredentialRequest(
+        scope: String,
         metadata: IssuerMetadata,
         credentialFormat: SupportedCredentialFormat,
-    ): Set<CredentialRequestParameters> = trim().split(" ").map { scope ->
-        metadata.supportedCredentialConfigurations
-            ?.entries?.firstOrNull { it.value.scope == scope && it.value.format == credentialFormat.format }?.key
-            ?.let { CredentialRequestParameters(credentialConfigurationId = it) }
-            ?: throw OAuth2Exception.UnknownCredentialConfiguration(scope)
-    }.toSet()
+    ): Set<CredentialRequestParameters>  {
+        if (credentialFormat.scope == null)
+            throw OAuth2Exception.UnknownCredentialConfiguration("Credential does not support scope: $credentialFormat")
+        if (!scope.trim().contains(credentialFormat.scope!!))
+            throw OAuth2Exception.UnknownCredentialConfiguration(scope)
+        return scope.split(" ").mapNotNull { singleScope ->
+            metadata.supportedCredentialConfigurations
+                ?.entries?.firstOrNull { it.value.scope == singleScope && it.value.format == credentialFormat.format }
+                ?.key
+                ?.let { CredentialRequestParameters(credentialConfigurationId = it) }
+        }.toSet().ifEmpty {
+            throw OAuth2Exception.UnknownCredentialConfiguration(scope)
+        }
+    }
 
     internal suspend fun createCredentialRequestProof(
         metadata: IssuerMetadata,
