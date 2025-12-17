@@ -29,15 +29,14 @@ data class StatusListJwt(
         verifyJwsObject: VerifyJwsObjectFun = VerifyJwsObject(),
         statusListInfo: StatusListInfo,
         isInstantInThePast: (Instant) -> Boolean,
-    ): KmmResult<StatusListTokenPayload> =
-        validateIntegrity(verifyJwsObject, this).transform { payload ->
-            validateStatusListTokenPayloadClaims(
-                statusListTokenPayload = payload,
-                statusListTokenResolvedAt = resolvedAt,
-                statusListInfo = statusListInfo,
-                isInstantInThePast = isInstantInThePast,
-            )
-        }
+    ): KmmResult<StatusListTokenPayload> = validateIntegrity(verifyJwsObject, this).transform { payload ->
+        validateStatusListTokenPayloadClaims(
+            statusListTokenPayload = payload,
+            statusListTokenResolvedAt = resolvedAt,
+            statusListInfo = statusListInfo,
+            isInstantInThePast = isInstantInThePast,
+        )
+    }
 
     /**
      * Validate the integrity of a status list jwt
@@ -45,21 +44,20 @@ data class StatusListJwt(
     private suspend fun validateIntegrity(
         verifyJwsObject: VerifyJwsObjectFun,
         statusListToken: StatusListJwt
-    ): KmmResult<StatusListTokenPayload> =
-        catching {
-            val jwsSigned = statusListToken.value
-            verifyJwsObject(jwsSigned).getOrElse {
-                throw IllegalStateException("Invalid signature", it)
-            }
-            val type = jwsSigned.header.type?.lowercase()
-                ?: throw IllegalArgumentException("Invalid type header")
-            val validTypes = listOf(
-                MediaTypes.STATUSLIST_JWT.lowercase(),
-                MediaTypes.Application.STATUSLIST_JWT.lowercase()
-            )
-            if (type !in validTypes) {
-                throw IllegalArgumentException("Invalid type header: $type")
-            }
-            jwsSigned.payload
+    ): KmmResult<StatusListTokenPayload> = catching {
+        val jwsSigned = statusListToken.value
+        verifyJwsObject(jwsSigned).getOrElse {
+            throw IllegalStateException("Invalid signature", it)
         }
+        val type = jwsSigned.header.type?.lowercase()
+            ?: throw IllegalArgumentException("Invalid type header")
+        val validTypes = listOf(
+            MediaTypes.STATUSLIST_JWT.lowercase(),
+            MediaTypes.Application.STATUSLIST_JWT.lowercase()
+        )
+        if (type !in validTypes) {
+            throw IllegalArgumentException("Invalid type header: $type")
+        }
+        jwsSigned.payload
+    }
 }

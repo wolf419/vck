@@ -56,11 +56,6 @@ data class RelyingPartyMetadata(
     @SerialName("id_token_signed_response_alg")
     val idTokenSignedResponseAlgString: String? = null,
 
-    /**
-     * OID JARM: JWE (RFC7516) `alg` algorithm JWA (RFC7518). REQUIRED for encrypting authorization responses.
-     * If both signing and encryption are requested, the response will be signed then encrypted, with the result being
-     * a Nested JWT, as defined in JWT (RFC7519). The default, if omitted, is that no encryption is performed.
-     */
     @Deprecated("Not used in OpenID4VP 1.0, use [encryptedResponseEncValuesSupported] instead")
     @SerialName("authorization_encrypted_response_alg")
     val authorizationEncryptedResponseAlgString: String? = null,

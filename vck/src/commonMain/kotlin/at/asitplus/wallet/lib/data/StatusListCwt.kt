@@ -28,15 +28,14 @@ data class StatusListCwt(
         verifyCoseSignature: VerifyCoseSignatureFun<StatusListTokenPayload> = VerifyCoseSignature(),
         statusListInfo: StatusListInfo,
         isInstantInThePast: (Instant) -> Boolean,
-    ): KmmResult<StatusListTokenPayload> =
-        validateIntegrity(verifyCoseSignature, this).transform { payload ->
-            validateStatusListTokenPayloadClaims(
-                statusListTokenPayload = payload,
-                statusListTokenResolvedAt = resolvedAt,
-                statusListInfo = statusListInfo,
-                isInstantInThePast = isInstantInThePast,
-            )
-        }
+    ): KmmResult<StatusListTokenPayload> = validateIntegrity(verifyCoseSignature, this).transform { payload ->
+        validateStatusListTokenPayloadClaims(
+            statusListTokenPayload = payload,
+            statusListTokenResolvedAt = resolvedAt,
+            statusListInfo = statusListInfo,
+            isInstantInThePast = isInstantInThePast,
+        )
+    }
 
     /**
      * Validate the integrity of a status list cwt
@@ -44,18 +43,17 @@ data class StatusListCwt(
     private suspend fun validateIntegrity(
         verifyCoseSignature: VerifyCoseSignatureFun<StatusListTokenPayload>,
         statusListToken: StatusListCwt
-    ): KmmResult<StatusListTokenPayload> =
-        catching {
-            val coseStatus = statusListToken.value
-            verifyCoseSignature(coseStatus, byteArrayOf(), null).getOrElse {
-                throw IllegalStateException("Invalid Signature.", it)
-            }
-            val type = coseStatus.protectedHeader.type?.lowercase()
-                ?: throw IllegalArgumentException("Invalid type header")
-            if (type != MediaTypes.Application.STATUSLIST_CWT.lowercase()) {
-                throw IllegalArgumentException("Invalid type header: $type")
-            }
-            coseStatus.payload
-                ?: throw IllegalStateException("Status list token payload not found.")
+    ): KmmResult<StatusListTokenPayload> = catching {
+        val coseStatus = statusListToken.value
+        verifyCoseSignature(coseStatus, byteArrayOf(), null).getOrElse {
+            throw IllegalStateException("Invalid Signature.", it)
         }
+        val type = coseStatus.protectedHeader.type?.lowercase()
+            ?: throw IllegalArgumentException("Invalid type header")
+        if (type != MediaTypes.Application.STATUSLIST_CWT.lowercase()) {
+            throw IllegalArgumentException("Invalid type header: $type")
+        }
+        coseStatus.payload
+            ?: throw IllegalStateException("Status list token payload not found.")
+    }
 }
