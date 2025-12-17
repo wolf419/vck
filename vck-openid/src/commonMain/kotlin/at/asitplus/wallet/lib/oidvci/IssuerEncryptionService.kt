@@ -94,19 +94,24 @@ class IssuerEncryptionService(
         request: CredentialRequestParameters,
     ): CredentialIssuer.CredentialResponse =
         request.credentialResponseEncryption?.let {
-            it.jweEncryption?.let { jweEncryption ->
-                Napier.d("encrypting response for ${it.jsonWebKey.keyId}")
-                val ciphertext: JweEncrypted = encryptCredentialResponse(
+            val recipientKey = it.jsonWebKey
+            val jweAlg = it.jweAlgorithm
+                ?: (recipientKey.algorithm as? JweAlgorithm)
+                ?: supportedJweAlgorithms.firstOrNull()
+            val jweEnc = it.jweEncryption
+                ?: throw InvalidEncryptionParameters("Unsupported enc: ${it.jweEncryptionString}")
+            Napier.d("encrypting response for $recipientKey")
+            CredentialIssuer.CredentialResponse.Encrypted(
+                encryptCredentialResponse(
                     header = JweHeader(
-                        algorithm = it.jweAlgorithm ?: (it.jsonWebKey.algorithm as? JweAlgorithm),
-                        encryption = jweEncryption,
-                        keyId = it.jsonWebKey.keyId,
+                        algorithm = jweAlg,
+                        encryption = jweEnc,
+                        keyId = recipientKey.keyId,
                     ),
                     payload = joseCompliantSerializer.encodeToString(response),
-                    recipientKey = it.jsonWebKey,
+                    recipientKey = recipientKey,
                 ).getOrThrow()
-                CredentialIssuer.CredentialResponse.Encrypted(ciphertext)
-            } ?: throw InvalidEncryptionParameters("Unsupported enc: ${it.jweEncryptionString}")
+            )
         } ?: run {
             if (requireResponseEncryption)
                 throw InvalidEncryptionParameters("Response encryption required, no params sent")

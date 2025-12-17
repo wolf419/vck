@@ -6,6 +6,7 @@ Release 5.11.0 (unreleased):
  - OpenID for Verifiable Credential Issuance:
    - In `SimpleAuthorizationService` add parameter `configurationIds` to method `credentialOfferWithAuthorizationCode`
    - Support different supported credential formats having the same scope value (as this is covered by the spec)
+   - Be sure to use correct JWE encryption algorithm on issuer and wallet side and advertise keys correctly
  - OpenID for Verifiable Presentations:
    - In `OpenId4VpVerifier` add constructor parameter `supportedJweEncryptionAlgorithms` to advertise in metadata, deprecating `supportedJweEncryptionAlgorithm` and `supportedJweAlgorithm`
  - OAuth 2.0:

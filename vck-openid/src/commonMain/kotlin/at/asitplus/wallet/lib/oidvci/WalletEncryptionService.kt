@@ -7,6 +7,7 @@ import at.asitplus.openid.CredentialResponseEncryption
 import at.asitplus.openid.CredentialResponseParameters
 import at.asitplus.openid.IssuerMetadata
 import at.asitplus.openid.SupportedAlgorithmsContainer
+import at.asitplus.signum.indispensable.josef.JsonWebKey
 import at.asitplus.signum.indispensable.josef.JweAlgorithm
 import at.asitplus.signum.indispensable.josef.JweEncrypted
 import at.asitplus.signum.indispensable.josef.JweEncryption
@@ -52,7 +53,7 @@ class WalletEncryptionService(
         metadata: IssuerMetadata
     ): KmmResult<WalletService.CredentialRequest> = catching {
         if (metadata.shouldEncryptRequest()) {
-            WalletService.CredentialRequest.Encrypted(encrypt(input, metadata).getOrThrow())
+            WalletService.CredentialRequest.Encrypted(encryptRequest(input, metadata).getOrThrow())
         } else {
             WalletService.CredentialRequest.Plain(input)
         }
@@ -63,16 +64,22 @@ class WalletEncryptionService(
                 (requireRequestEncryption && credentialRequestEncryption?.jsonWebKeySet != null)
 
     /** Encrypts the credential request. */
-    internal suspend fun encrypt(
+    internal suspend fun encryptRequest(
         input: CredentialRequestParameters,
         metadata: IssuerMetadata,
     ): KmmResult<JweEncrypted> = catching {
         val recipientKey = metadata.credentialRequestEncryption?.jsonWebKeySet?.keys?.firstOrNull()
             ?: throw InvalidEncryptionParameters("No recipient key found in metadata")
+        val jweAlg = metadata.credentialRequestEncryption.selectAlgorithm()
+            ?: (recipientKey.algorithm as? JweAlgorithm?)
+            ?: supportedJweAlgorithm
+        val jweEnc = metadata.credentialRequestEncryption.selectEncryption()
+            ?: supportedJweEncryptionAlgorithm
         encryptCredentialRequest(
             header = JweHeader(
-                algorithm = metadata.credentialRequestEncryption.selectAlgorithm(),
-                encryption = metadata.credentialRequestEncryption.selectEncryption()
+                algorithm = jweAlg,
+                encryption = jweEnc,
+                keyId = recipientKey.keyId
             ),
             payload = joseCompliantSerializer.encodeToString(input),
             recipientKey = recipientKey
@@ -82,25 +89,25 @@ class WalletEncryptionService(
     }
 
     /** Fallback to [supportedJweAlgorithm] and let's see if issuer can decrypt it. */
-    private fun SupportedAlgorithmsContainer?.selectAlgorithm(): JweAlgorithm =
+    private fun SupportedAlgorithmsContainer?.selectAlgorithm(): JweAlgorithm? =
         this?.supportedAlgorithms?.filterIsInstance<JweAlgorithm>()?.firstOrNull {
             it == supportedJweAlgorithm
-        } ?: supportedJweAlgorithm
+        }
 
     /** Fallback to [supportedJweEncryptionAlgorithm] and let's see if issuer can decrypt it. */
-    private fun SupportedAlgorithmsContainer?.selectEncryption(): JweEncryption =
+    private fun SupportedAlgorithmsContainer?.selectEncryption(): JweEncryption? =
         this?.supportedEncryptionAlgorithms?.firstOrNull {
             it == supportedJweEncryptionAlgorithm
         } ?: this?.supportedEncryptionAlgorithms?.firstOrNull {
             it.algorithm.requiresNonce() && it.algorithm.isAuthenticated()
-        } ?: supportedJweEncryptionAlgorithm
+        }
 
     /** Appends credential response encryption information to the request. */
     internal fun credentialResponseEncryption(metadata: IssuerMetadata): CredentialResponseEncryption? =
         if (metadata.credentialResponseEncryption != null)
             if (requestResponseEncryption || metadata.credentialResponseEncryption?.encryptionRequired == true) {
                 CredentialResponseEncryption(
-                    jsonWebKey = decryptionKeyMaterial.jsonWebKey,
+                    jsonWebKey = decryptionKeyMaterial.jsonWebKey.forEncryption(),
                     jweAlgorithm = supportedJweAlgorithm,
                     jweEncryptionString = supportedJweEncryptionAlgorithm.identifier,
                 )
@@ -131,5 +138,8 @@ class WalletEncryptionService(
         joseCompliantSerializer.decodeFromString<CredentialResponseParameters>(decrypted.payload)
     }
 
+    // should always be ecdh-es for encryption
+    private fun JsonWebKey.forEncryption(): JsonWebKey =
+        this.copy(algorithm = JweAlgorithm.ECDH_ES, publicKeyUse = "enc")
 
 }
