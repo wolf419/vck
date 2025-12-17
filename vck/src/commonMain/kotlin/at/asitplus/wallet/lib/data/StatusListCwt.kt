@@ -3,17 +3,18 @@ package at.asitplus.wallet.lib.data
 import at.asitplus.KmmResult
 import at.asitplus.catching
 import at.asitplus.signum.indispensable.cosef.CoseSigned
+import at.asitplus.signum.indispensable.cosef.io.coseCompliantSerializer
 import at.asitplus.wallet.lib.cbor.VerifyCoseSignature
 import at.asitplus.wallet.lib.cbor.VerifyCoseSignatureFun
 import at.asitplus.wallet.lib.data.rfc.tokenStatusList.StatusListInfo
 import at.asitplus.wallet.lib.data.rfc.tokenStatusList.StatusListTokenPayload
+import kotlinx.serialization.decodeFromByteArray
 import kotlin.time.Instant
 
 data class StatusListCwt(
-    val value: CoseSigned<StatusListTokenPayload>,
+    val value: CoseSigned<ByteArray>,
     override val resolvedAt: Instant?,
 ) : StatusListToken() {
-    override val payload = value.payload ?: throw IllegalStateException("Payload not found.")
 
     /**
      * Validate the Status List Token:
@@ -25,7 +26,7 @@ data class StatusListCwt(
      * depending on token type.
      */
     suspend fun validate(
-        verifyCoseSignature: VerifyCoseSignatureFun<StatusListTokenPayload> = VerifyCoseSignature(),
+        verifyCoseSignature: VerifyCoseSignatureFun<ByteArray> = VerifyCoseSignature(),
         statusListInfo: StatusListInfo,
         isInstantInThePast: (Instant) -> Boolean,
     ): KmmResult<StatusListTokenPayload> = validateIntegrity(verifyCoseSignature, this).transform { payload ->
@@ -41,7 +42,7 @@ data class StatusListCwt(
      * Validate the integrity of a status list cwt
      */
     private suspend fun validateIntegrity(
-        verifyCoseSignature: VerifyCoseSignatureFun<StatusListTokenPayload>,
+        verifyCoseSignature: VerifyCoseSignatureFun<ByteArray>,
         statusListToken: StatusListCwt
     ): KmmResult<StatusListTokenPayload> = catching {
         val coseStatus = statusListToken.value
@@ -53,7 +54,9 @@ data class StatusListCwt(
         if (type != MediaTypes.Application.STATUSLIST_CWT.lowercase()) {
             throw IllegalArgumentException("Invalid type header: $type")
         }
-        coseStatus.payload
-            ?: throw IllegalStateException("Status list token payload not found.")
+        coseCompliantSerializer.decodeFromByteArray<StatusListTokenPayload>(
+            coseStatus.payload
+                ?: throw IllegalStateException("Status list token payload not found.")
+        )
     }
 }

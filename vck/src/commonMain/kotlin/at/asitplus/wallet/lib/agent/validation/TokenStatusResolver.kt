@@ -32,7 +32,7 @@ class TokenStatusResolverImpl(
     private val clock: Clock = Clock.System,
     private val zlibService: ZlibService = DefaultZlibService(),
     private val verifyJwsObjectIntegrity: VerifyJwsObjectFun = VerifyJwsObject(),
-    private val verifyCoseSignature: VerifyCoseSignatureFun<StatusListTokenPayload> = VerifyCoseSignature(),
+    private val verifyCoseSignature: VerifyCoseSignatureFun<ByteArray> = VerifyCoseSignature(),
 ) : TokenStatusResolver {
     override suspend fun invoke(status: Status): KmmResult<TokenStatus> = catching {
         val token = resolveStatusListToken(status.statusList!!.uri)
@@ -62,7 +62,7 @@ fun StatusListTokenResolver.toTokenStatusResolver(
     clock: Clock = Clock.System,
     zlibService: ZlibService = DefaultZlibService(),
     verifyJwsObjectIntegrity: VerifyJwsObjectFun = VerifyJwsObject(),
-    verifyCoseSignature: VerifyCoseSignatureFun<StatusListTokenPayload> = VerifyCoseSignature(),
+    verifyCoseSignature: VerifyCoseSignatureFun<ByteArray> = VerifyCoseSignature(),
 ) = TokenStatusResolver { status ->
     catching {
         val token = this(status.statusList!!.uri)

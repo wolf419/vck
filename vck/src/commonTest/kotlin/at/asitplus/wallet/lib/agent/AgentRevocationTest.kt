@@ -2,6 +2,8 @@ package at.asitplus.wallet.lib.agent
 
 import at.asitplus.openid.OidcUserInfo
 import at.asitplus.openid.OidcUserInfoExtended
+import at.asitplus.signum.indispensable.cosef.io.Base16Strict
+import at.asitplus.signum.indispensable.cosef.io.coseCompliantSerializer
 import at.asitplus.testballoon.invoke
 import at.asitplus.testballoon.withFixtureGenerator
 import at.asitplus.wallet.lib.agent.FixedTimePeriodProvider.timePeriod
@@ -23,7 +25,11 @@ import io.kotest.assertions.AssertionErrorBuilder.Companion.fail
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.should
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import io.kotest.matchers.types.shouldBeInstanceOf
+import io.matthewnelson.encoding.core.Encoder.Companion.encodeToString
+import kotlinx.serialization.decodeFromByteArray
 import kotlinx.serialization.json.Json
 import kotlin.random.Random
 import kotlin.time.Clock
@@ -49,10 +55,8 @@ val AgentRevocationTest by testSuite {
     }) - {
 
         "revocation list should contain indices of revoked credential" {
-            val statusListJwt = it.statusListIssuer.issueStatusListJwt()
-            statusListJwt.shouldNotBeNull()
-
-            val statusList = statusListJwt.payload.statusList
+            val statusList = it.statusListIssuer.issueStatusListJwt()
+                .shouldNotBeNull().payload.statusList
 
             verifyStatusList(statusList, it.expectedRevokedIndexes)
         }
@@ -92,7 +96,7 @@ val AgentRevocationTest by testSuite {
                 time = timestamp,
             )
             providedToken.shouldBeInstanceOf<StatusListJwt>()
-            providedToken.value.payload.statusList shouldBe issuedToken.payload.statusList
+                .value.payload.statusList shouldBe issuedToken.payload.statusList
         }
 
         "issued cwt should have same status list as provided token when asking for cwt" {
@@ -114,18 +118,25 @@ val AgentRevocationTest by testSuite {
                 time = timestamp,
             )
             providedToken.shouldBeInstanceOf<StatusListCwt>()
-            providedToken.value.payload!!.statusList shouldBe issuedToken.payload.statusList
+                .value.payload.shouldNotBeNull().apply {
+                    coseCompliantSerializer.decodeFromByteArray<StatusListTokenPayload>(this)
+                        .statusList shouldBe issuedToken.payload.statusList
+                }
         }
 
 
         "revocation credential should be valid" {
-            it.statusListIssuer.issueStatusListJwt().also {
-                it.shouldNotBeNull()
-                VerifyJwsObject().invoke(it).getOrThrow()
+            it.statusListIssuer.issueStatusListJwt().apply {
+                shouldNotBeNull()
+                VerifyJwsObject().invoke(this).getOrThrow()
             }
-            it.statusListIssuer.issueStatusListCwt().also {
-                it.shouldNotBeNull()
-                VerifyCoseSignature<StatusListTokenPayload>().invoke(it, byteArrayOf(), null).isSuccess shouldBe true
+            it.statusListIssuer.issueStatusListCwt().apply {
+                shouldNotBeNull()
+                payload.shouldNotBeNull().encodeToString(Base16Strict).lowercase().apply {
+                    shouldContain("636c7374") // text(3) "lst"
+                    shouldNotContain("d818") // tagged item (24) as payload
+                }
+                VerifyCoseSignature<ByteArray>().invoke(this, byteArrayOf(), null).isSuccess shouldBe true
             }
         }
 
@@ -138,14 +149,14 @@ val AgentRevocationTest by testSuite {
                 ).getOrThrow()
             ).getOrElse {
                 fail("no issued credentials")
-            }
-            result.shouldBeInstanceOf<Issuer.IssuedCredential.VcJwt>()
+            }.shouldBeInstanceOf<Issuer.IssuedCredential.VcJwt>()
 
-            val vcJws = ValidatorVcJws().verifyVcJws(result.signedVcJws, it.verifierKeyMaterial.publicKey)
-            vcJws.shouldBeInstanceOf<Verifier.VerifyCredentialResult.SuccessJwt>()
-            val credentialStatus = vcJws.jws.vc.credentialStatus
-            credentialStatus.shouldNotBeNull()
-            credentialStatus.statusList.shouldNotBeNull().index.shouldNotBeNull()
+            ValidatorVcJws().verifyVcJws(result.signedVcJws, it.verifierKeyMaterial.publicKey)
+                .shouldBeInstanceOf<Verifier.VerifyCredentialResult.SuccessJwt>()
+                .jws.vc.credentialStatus
+                .shouldNotBeNull()
+                .statusList.shouldNotBeNull()
+                .index.shouldNotBeNull()
         }
 
         "encoding to a known value works" {
@@ -155,7 +166,7 @@ val AgentRevocationTest by testSuite {
             issuerCredentialStore.revokeCredentialsWithIndexes(expectedRevokedIndexes)
 
             val revocationList = statusListIssuer.buildStatusList(timePeriod)
-            revocationList.shouldNotBeNull()
+                .shouldNotBeNull()
 
             verifyStatusList(revocationList, expectedRevokedIndexes)
         }

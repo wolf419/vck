@@ -2,6 +2,7 @@ package at.asitplus.wallet.lib.agent
 
 import at.asitplus.openid.truncateToSeconds
 import at.asitplus.signum.indispensable.cosef.CoseHeader
+import at.asitplus.signum.indispensable.cosef.io.coseCompliantSerializer
 import at.asitplus.wallet.lib.DefaultZlibService
 import at.asitplus.wallet.lib.ZlibService
 import at.asitplus.wallet.lib.cbor.CoseHeaderCertificate
@@ -24,6 +25,8 @@ import at.asitplus.wallet.lib.jws.JwsHeaderCertOrJwk
 import at.asitplus.wallet.lib.jws.SignJwt
 import at.asitplus.wallet.lib.jws.SignJwtFun
 import io.github.aakira.napier.Napier
+import kotlinx.serialization.builtins.ByteArraySerializer
+import kotlinx.serialization.encodeToByteArray
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
@@ -43,7 +46,7 @@ class StatusListAgent(
     private val clock: Clock = Clock.System,
     private val timePeriodProvider: TimePeriodProvider = FixedTimePeriodProvider,
     private val signStatusListJwt: SignJwtFun<StatusListTokenPayload> = SignJwt(keyMaterial, JwsHeaderCertOrJwk()),
-    private val signStatusListCwt: SignCoseFun<StatusListTokenPayload> =
+    private val signStatusListCwt: SignCoseFun<ByteArray> =
         SignCose(keyMaterial, CoseHeaderKeyIdForKeyMaterial(), CoseHeaderCertificate()),
 ) : StatusListIssuer {
 
@@ -65,13 +68,15 @@ class StatusListAgent(
      * returns a CWS representation of that.
      */
     override suspend fun issueStatusListCwt(time: Instant?) =
-        signStatusListCwt(
-            protectedHeader = CoseHeader(type = MediaTypes.Application.STATUSLIST_CWT),
-            unprotectedHeader = null,
-            payload = buildStatusListTokenPayload(time.toTimePeriod()),
-            serializer = StatusListTokenPayload.serializer(),
-        ).getOrElse {
-            throw IllegalStateException("Status token could not be created", it)
+        with(buildStatusListTokenPayload(time.toTimePeriod())) {
+            signStatusListCwt(
+                protectedHeader = CoseHeader(type = MediaTypes.Application.STATUSLIST_CWT),
+                unprotectedHeader = null,
+                payload = coseCompliantSerializer.encodeToByteArray(this),
+                serializer = ByteArraySerializer(),
+            ).getOrElse {
+                throw IllegalStateException("Status token could not be created", it)
+            }
         }
 
     /**

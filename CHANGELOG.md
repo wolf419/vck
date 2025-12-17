@@ -13,6 +13,8 @@ Release 5.11.0 (unreleased):
  - OAuth 2.0:
    - In `SimpleAuthorizationService` offer `client_attestation_pop_signing_alg_values_supported` and `client_attestation_signing_alg_values_supported` in line with [OAuth 2.0 Attestation-Based Client Authentication](https://www.ietf.org/archive/id/draft-ietf-oauth-attestation-based-client-auth-07.html#name-authorization-server-metada)
    - Use DPoP proofs on client calls
+ - Token status list:
+   - CBOR encoded token status list shall not be tagged with 24 like other COSE payloads (`d818` in hex)
 
 Release 5.10.1:
  - Proximity presentations:
@@ -23,7 +25,7 @@ Release 5.10.1:
    - In `OpenId4VpVerifier` add option to provide `externalId` to methods `validateAuthnRequest()` and `submitAuthnRequest()`, useful for DCAPI flows
 
 Release 5.10.0:
- - StatusListToken:
+ - Token status list:
    - Remove `StatusTokenValidator`
    - Remove `StatusTokenIntegrityValidator` class
    - Refactor `StatusListToken.StatusListJwt` to `StatusListJwt`
@@ -350,7 +352,7 @@ Release 5.6.2:
 
 Release 5.6.1:
  - Expose details for `ConstraintFieldsEvaluationException`
- - Token status:
+ - Token status list:
    - Errors in status list lookup lead to a `null` token status, not to an error as before, i.e. `TokenStatusEvaluationException` is never thrown
  - Remote Qualified Electronic Signatures:
    - In `RqesOpenId4VpHolder` fix validation of signing credentials
@@ -383,7 +385,7 @@ Release 5.6.0:
    - Replace `CoseService.createSignedCoseWithDetachedPayload()` with `SignCoseDetachedFun`
 
 Release 5.5.4:
- - Token status:
+ - Token status list:
    - Add considerations for separating the semantics "no token status mechanism is defined" from "evaluating token status failed"
    - Provide revocation status to verifier
  - DCQL:
@@ -541,7 +543,7 @@ Release 5.3.1:
 - Fix validation of KB-JWT for SD-JWT presentations
 
 Release 5.3.0:
-- Implement [token-status-list-06](https://www.ietf.org/archive/id/draft-ietf-oauth-status-list-06.html), replacing implementation of Revocation List 2020:
+- Implement token status list from [token-status-list-06](https://www.ietf.org/archive/id/draft-ietf-oauth-status-list-06.html), replacing implementation of Revocation List 2020:
   - `Holder`:
     - Remove `setRevocationList`
     - Change `StoredCredential` revocation status to token status

@@ -13,7 +13,6 @@ data class StatusListJwt(
     val value: JwsSigned<StatusListTokenPayload>,
     override val resolvedAt: Instant?,
 ) : StatusListToken() {
-    override val payload = value.payload
 
     /**
      * Validate the Status List Token:

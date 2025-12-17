@@ -13,7 +13,6 @@ import kotlin.time.Instant
 
 sealed class StatusListToken {
     abstract val resolvedAt: Instant?
-    abstract val payload: StatusListTokenPayload
 
     /**
      * Validate the Status List Token:
@@ -26,7 +25,7 @@ sealed class StatusListToken {
      */
     suspend fun validate(
         verifyJwsObject: VerifyJwsObjectFun = VerifyJwsObject(),
-        verifyCoseSignature: VerifyCoseSignatureFun<StatusListTokenPayload> = VerifyCoseSignature(),
+        verifyCoseSignature: VerifyCoseSignatureFun<ByteArray> = VerifyCoseSignature(),
         statusListInfo: StatusListInfo,
         isInstantInThePast: (Instant) -> Boolean
     ): KmmResult<StatusListTokenPayload> = when (this) {

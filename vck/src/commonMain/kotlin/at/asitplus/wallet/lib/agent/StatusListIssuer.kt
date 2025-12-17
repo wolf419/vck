@@ -14,7 +14,7 @@ import at.asitplus.wallet.lib.data.rfc.tokenStatusList.agents.StatusProvider
  * It can issue Verifiable Credentials, revoke credentials and build a revocation list.
  */
 interface StatusListIssuer :
-    StatusIssuer<JwsSigned<StatusListTokenPayload>, CoseSigned<StatusListTokenPayload>>,
+    StatusIssuer<JwsSigned<StatusListTokenPayload>, CoseSigned<ByteArray>>,
     StatusProvider<StatusListToken> {
 
     /**
