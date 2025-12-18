@@ -188,17 +188,19 @@ class SimpleAuthorizationService(
     suspend fun credentialOfferWithAuthorizationCode(
         credentialIssuer: String,
         configurationIds: Collection<String> = this.strategy.allCredentialIdentifier(),
-    ): CredentialOffer = CredentialOffer(
-        credentialIssuer = credentialIssuer,
-        configurationIds = configurationIds.ifEmpty { strategy.allCredentialIdentifier() },
-        grants = CredentialOfferGrants(
-            authorizationCode = CredentialOfferGrantsAuthCode(
-                issuerState = codeService.provideCode(),
-                authorizationServer = publicContext
-            ),
-        )
-    ).also {
-        issuerStateToCredentialOffer.put(it.grants!!.authorizationCode!!.issuerState!!, it)
+    ): CredentialOffer = codeService.provideCode().let { issuerState ->
+        CredentialOffer(
+            credentialIssuer = credentialIssuer,
+            configurationIds = configurationIds.ifEmpty { strategy.allCredentialIdentifier() }.toSet(),
+            grants = CredentialOfferGrants(
+                authorizationCode = CredentialOfferGrantsAuthCode(
+                    issuerState = issuerState,
+                    authorizationServer = publicContext
+                ),
+            )
+        ).also {
+            issuerStateToCredentialOffer.put(issuerState, it)
+        }
     }
 
     /**
@@ -216,7 +218,7 @@ class SimpleAuthorizationService(
         configurationIds: Collection<String> = this.strategy.allCredentialIdentifier(),
     ): CredentialOffer = CredentialOffer(
         credentialIssuer = credentialIssuer,
-        configurationIds = configurationIds.ifEmpty { strategy.allCredentialIdentifier() },
+        configurationIds = configurationIds.ifEmpty { strategy.allCredentialIdentifier() }.toSet(),
         grants = CredentialOfferGrants(
             preAuthorizedCode = CredentialOfferGrantsPreAuthCode(
                 preAuthorizedCode = providePreAuthorizedCode(user),
@@ -239,8 +241,8 @@ class SimpleAuthorizationService(
         input: String,
         httpRequest: RequestInfo?,
     ) = par(
-        requestParser.parseRequestParameters(input).getOrThrow().parameters,
-        httpRequest
+        request = requestParser.parseRequestParameters(input).getOrThrow().parameters,
+        httpRequest = httpRequest
     )
 
     /**
@@ -360,18 +362,26 @@ class SimpleAuthorizationService(
             strategy.filterScope(it)
                 ?: throw InvalidScope("No matching scope in $it")
         }
-        val issuerStateCorrect = issuerState?.let {
-            if (codeService.verifyAndRemove(it)) true
-            else if (issuerStateToCredentialOffer.remove(it) != null) true
-            else false
-        } ?: true
-        if (!issuerStateCorrect)
-            throw InvalidGrant("issuer_state invalid: $issuerState")
-        // todo compare the actual credential offer against the request, if it matches semantically
-
         authorizationDetails?.let {
             strategy.validateAuthorizationDetails(it)
         }
+        if (issuerState != null) {
+            // The wallet could have started an auth code flow without any credential offer,
+            // so the issuerState may be in fact null.
+            if (!codeService.verifyAndRemove(issuerState!!))
+                throw InvalidGrant("issuer_state invalid: $issuerState")
+            val credentialOffer = issuerStateToCredentialOffer.remove(issuerState!!)
+                ?: throw InvalidGrant("issuer_state invalid: $issuerState")
+            if (scope != null) {
+                if (!strategy.validateScope(scope!!, credentialOffer.configurationIds))
+                    throw InvalidScope("Scope not from credential offer: $scope")
+            }
+            if (authorizationDetails != null) {
+                if (!strategy.validateAuthorizationDetails(authorizationDetails!!, credentialOffer.configurationIds))
+                    throw InvalidAuthorizationDetails("AuthnDetails not from credential offer: $authorizationDetails")
+            }
+        }
+
         return this
     }
 

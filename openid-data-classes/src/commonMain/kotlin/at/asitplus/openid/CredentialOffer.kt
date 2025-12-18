@@ -21,7 +21,7 @@ data class CredentialOffer(
      * Authorization Request, see [AuthenticationRequestParameters.scope].
      */
     @SerialName("credential_configuration_ids")
-    val configurationIds: Collection<String>,
+    val configurationIds: Set<String>,
 
     /**
      * OID4VCI: OPTIONAL. If [grants] is not present or is empty, the Wallet MUST determine the Grant Types the

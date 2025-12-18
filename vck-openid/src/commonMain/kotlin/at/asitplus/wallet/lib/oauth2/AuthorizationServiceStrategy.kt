@@ -43,15 +43,24 @@ interface AuthorizationServiceStrategy {
         tokenRequestAuthnDetails: Set<AuthorizationDetails>,
     ): Set<AuthorizationDetails>
 
+    /** Validates the requested scope are valid for the given credential configuration ids. */
+    fun validateScope(scope: String, configurationIds: Set<String>): Boolean
+
     /** Filter the requested scope in the access token request to ones valid for credential issuance */
     fun filterScope(scope: String): String?
 
     /** Return all valid scopes for pre-authorized codes, that the client may use in token requests */
     fun validScopes(): String
 
+    /** Validates that the requested authorization details are valid for the given credential configuration ids. */
+    fun validateAuthorizationDetails(
+        authorizationDetails: Collection<AuthorizationDetails>,
+        configurationIds: Set<String>
+    ): Boolean
+
     /** Return all valid authorization details for pre-authorized codes, that the client may use in token requests */
     fun validAuthorizationDetails(location: String): Collection<AuthorizationDetails>
 
     /** Return all valid credential identifiers for all schemes. */
-    fun allCredentialIdentifier(): Collection<String>
+    fun allCredentialIdentifier(): Set<String>
 }

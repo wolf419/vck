@@ -1,8 +1,6 @@
 package at.asitplus.wallet.lib.oauth2
 
 import at.asitplus.catching
-import at.asitplus.openid.OidcUserInfo
-import at.asitplus.openid.OidcUserInfoExtended
 import at.asitplus.openid.PushedAuthenticationResponseParameters
 import at.asitplus.openid.RequestParameters
 import at.asitplus.openid.TokenIntrospectionRequest
@@ -36,28 +34,24 @@ val OAuth2ClientAuthenticationTest by testSuite {
         val attesterBackend = SignJwt<JsonWebToken>(EphemeralKeyWithSelfSignedCert(), JwsHeaderCertOrJwk())
         val clientKey = EphemeralKeyWithSelfSignedCert()
         val client = OAuth2Client()
-        val cattest =
-            BuildClientAttestationJwt(
-                attesterBackend,
-                clientId = client.clientId,
-                issuer = "someissuer",
-                clientKey = clientKey.jsonWebKey
-            )
+        val clientAttestation = BuildClientAttestationJwt(
+            attesterBackend,
+            clientId = client.clientId,
+            issuer = "someissuer",
+            clientKey = clientKey.jsonWebKey
+        )
 
         val signClientAttestationPop: SignJwtFun<JsonWebToken> = SignJwt(clientKey, JwsHeaderNone())
-        val clientAttestationPop =
-            BuildClientAttestationPoPJwt(
-                signJwt = signClientAttestationPop,
-                clientId = client.clientId,
-                audience = "some server",
-                randomSource = RandomSource.Default
-            )
-
+        val clientAttestationPop = BuildClientAttestationPoPJwt(
+            signJwt = signClientAttestationPop,
+            clientId = client.clientId,
+            audience = "some server",
+            randomSource = RandomSource.Default
+        )
 
         object {
             val scope = randomString()
             val client = client
-            val user = OidcUserInfoExtended(OidcUserInfo(randomString()))
             var server = SimpleAuthorizationService(
                 strategy = DummyAuthorizationServiceStrategy(scope),
                 clientAuthenticationService = ClientAuthenticationService(
@@ -65,9 +59,7 @@ val OAuth2ClientAuthenticationTest by testSuite {
                 )
             )
             val clientKey = clientKey
-
-            var clientAttestation = cattest
-
+            var clientAttestation = clientAttestation
             val clientAttestationPop = clientAttestationPop
 
             suspend fun getToken(state: String, code: String): TokenResponseParameters = server.token(
@@ -80,7 +72,7 @@ val OAuth2ClientAuthenticationTest by testSuite {
                     url = "https://example.com/",
                     method = HttpMethod.Post,
                     dpop = null,
-                    clientAttestation = clientAttestation.serialize(),
+                    clientAttestation = this.clientAttestation.serialize(),
                     clientAttestationPop = clientAttestationPop.serialize()
                 )
             ).getOrThrow()

@@ -3,7 +3,6 @@ package at.asitplus.wallet.lib.oauth2
 import at.asitplus.openid.AuthorizationDetails
 import at.asitplus.openid.OpenIdAuthorizationDetails
 import at.asitplus.wallet.lib.oidvci.OAuth2Exception.InvalidAuthorizationDetails
-import at.asitplus.wallet.lib.oidvci.matches
 
 class DummyAuthorizationServiceStrategy(
     private val scope: String,
@@ -13,43 +12,36 @@ class DummyAuthorizationServiceStrategy(
 
     override fun validAuthorizationDetails(location: String): Collection<OpenIdAuthorizationDetails> = listOf()
 
+    override fun validateAuthorizationDetails(
+        authorizationDetails: Collection<AuthorizationDetails>,
+        configurationIds: Set<String>
+    ): Boolean = false
+
     @Throws(InvalidAuthorizationDetails::class)
     override fun validateAuthorizationDetails(
         authorizationDetails: Collection<AuthorizationDetails>,
     ) {
-        authorizationDetails.toSet().also {
-            if (it.isEmpty())
-                throw InvalidAuthorizationDetails("No valid authorization details in $authorizationDetails")
-        }
+        throw InvalidAuthorizationDetails()
     }
 
     override fun filterAuthorizationDetailsForTokenResponse(
         authorizationDetails: Collection<AuthorizationDetails>
     ) = authorizationDetails.filterIsInstance<OpenIdAuthorizationDetails>().toSet()
 
-
     @Throws(InvalidAuthorizationDetails::class)
     override fun matchAndFilterAuthorizationDetailsForTokenResponse(
         authnRequestAuthnDetails: Collection<AuthorizationDetails>?,
         tokenRequestAuthnDetails: Set<AuthorizationDetails>,
-    ) = tokenRequestAuthnDetails
-        .filterIsInstance<OpenIdAuthorizationDetails>()
-        .toSet()
-        .apply {
-            this.forEach { filter ->
-                if (!filter.requestedFromAuthnRequest(authnRequestAuthnDetails))
-                    throw InvalidAuthorizationDetails("Authorization details not from auth code: $filter")
-            }
-        }
-
-
-    private fun OpenIdAuthorizationDetails.requestedFromAuthnRequest(
-        details: Collection<AuthorizationDetails>?
-    ): Boolean = details!!.filterIsInstance<OpenIdAuthorizationDetails>().any { matches(it) }
+    ) = throw InvalidAuthorizationDetails()
 
     override fun filterScope(scope: String): String = scope
 
-    override fun allCredentialIdentifier(): Collection<String> = listOf()
+    override fun validateScope(
+        scope: String,
+        configurationIds: Set<String>
+    ): Boolean = scope == this.scope
+
+    override fun allCredentialIdentifier(): Set<String> = setOf()
 
 }
 

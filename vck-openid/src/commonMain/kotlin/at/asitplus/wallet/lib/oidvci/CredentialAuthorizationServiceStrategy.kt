@@ -25,12 +25,23 @@ class CredentialAuthorizationServiceStrategy(
 
     override fun validScopes(): String = supportedCredentialSchemes.map { it.value.scope }.distinct().joinToString(" ")
 
-    override fun allCredentialIdentifier(): Collection<String> = supportedCredentialSchemes.map { it.key }
+    override fun allCredentialIdentifier(): Set<String> = supportedCredentialSchemes.keys
+
+    override fun validateAuthorizationDetails(
+        authorizationDetails: Collection<AuthorizationDetails>,
+        configurationIds: Set<String>
+    ): Boolean = authorizationDetails.all { it.validate() && it.credentialConfigurationId in configurationIds }
 
     override fun validAuthorizationDetails(location: String): Collection<OpenIdAuthorizationDetails> =
         supportedCredentialSchemes.entries.map {
             OpenIdAuthorizationDetails(credentialConfigurationId = it.key, locations = setOf(location))
         }
+
+    override fun validateScope(
+        scope: String,
+        configurationIds: Set<String>
+    ): Boolean = scope.trim().split(" ")
+        .all { supportedCredentialSchemes.filter { it.key in configurationIds }.map { it.value.scope }.contains(it) }
 
     override fun filterScope(scope: String): String = scope.trim().split(" ")
         .mapNotNull { scope ->

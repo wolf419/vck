@@ -9,6 +9,7 @@ import at.asitplus.testballoon.withFixtureGenerator
 import at.asitplus.wallet.lib.agent.IssuerAgent
 import at.asitplus.wallet.lib.agent.RandomSource
 import at.asitplus.wallet.lib.data.ConstantIndex.AtomicAttribute2023
+import at.asitplus.wallet.lib.data.ConstantIndex.CredentialRepresentation.ISO_MDOC
 import at.asitplus.wallet.lib.data.ConstantIndex.CredentialRepresentation.PLAIN_JWT
 import at.asitplus.wallet.lib.data.rfc3986.toUri
 import at.asitplus.wallet.lib.oauth2.OAuth2Client
@@ -57,7 +58,7 @@ val OidvciOfferCodeTest by testSuite {
                     state = state,
                     scope = scope,
                     resource = issuer.metadata.credentialIssuer,
-                    issuerState = credentialOffer.grants?.authorizationCode.shouldNotBeNull().issuerState
+                    issuerState = credentialOffer.grants?.authorizationCode?.issuerState
                 )
                 val input = authnRequest as RequestParameters
                 val authnResponse = authorizationService.authorize(input) { catching { DummyUserProvider.user } }
@@ -81,7 +82,7 @@ val OidvciOfferCodeTest by testSuite {
                 val authnRequest = oauth2Client.createAuthRequestJar(
                     state = state,
                     authorizationDetails = authorizationDetails,
-                    issuerState = credentialOffer.grants?.authorizationCode.shouldNotBeNull().issuerState
+                    issuerState = credentialOffer.grants?.authorizationCode?.issuerState
                 )
                 val input = authnRequest as RequestParameters
                 val authnResponse = authorizationService.authorize(input) { catching { DummyUserProvider.user } }
@@ -204,5 +205,57 @@ val OidvciOfferCodeTest by testSuite {
             credential.credentials.shouldNotBeEmpty()
                 .first().credentialString.shouldNotBeNull()
         }
+
+        test("process with code after credential offer, but wrong issuer state fails") {
+            val credentialIdToRequest = it.mapper.toCredentialIdentifier(AtomicAttribute2023, PLAIN_JWT)
+            val credentialOffer = it.authorizationService.credentialOfferWithAuthorizationCode(
+                credentialIssuer = it.issuer.publicContext,
+                configurationIds = setOf(credentialIdToRequest)
+            )
+            val credentialFormat = it.issuer.metadata.supportedCredentialConfigurations!![credentialIdToRequest]
+                .shouldNotBeNull()
+            // important step: mess with the issuer state, so the wallet sends an incorrect one
+            val malignAuthCode = credentialOffer.grants.shouldNotBeNull().authorizationCode.shouldNotBeNull()
+                .copy(issuerState = "wrong issuer state")
+            val malignOffer = credentialOffer.copy(
+                grants = credentialOffer.grants.shouldNotBeNull().copy(authorizationCode = malignAuthCode)
+            )
+            shouldThrow<OAuth2Exception.InvalidGrant> {
+                it.getToken(malignOffer, credentialFormat.scope.shouldNotBeNull())
+            }
+        }
+
+        test("process with code after credential offer, but scope not covered offer fails") {
+            val credentialIdToRequest = it.mapper.toCredentialIdentifier(AtomicAttribute2023, PLAIN_JWT)
+            val credentialOffer = it.authorizationService.credentialOfferWithAuthorizationCode(
+                credentialIssuer = it.issuer.publicContext,
+                configurationIds = setOf(credentialIdToRequest)
+            )
+            val otherCredentialIdToRequest = it.mapper.toCredentialIdentifier(AtomicAttribute2023, ISO_MDOC)
+            // important step: mess with the scope value
+            val malignScope = it.issuer.metadata.supportedCredentialConfigurations!![otherCredentialIdToRequest]
+                .shouldNotBeNull().scope.shouldNotBeNull().reversed()
+            shouldThrow<OAuth2Exception.InvalidScope> {
+                it.getToken(credentialOffer, malignScope)
+            }
+        }
+
+        test("process with code after credential offer, but wrong authorization details should fail") {
+            val credentialIdToRequest = it.mapper.toCredentialIdentifier(AtomicAttribute2023, PLAIN_JWT)
+            val credentialOffer = it.authorizationService.credentialOfferWithAuthorizationCode(
+                credentialIssuer = it.issuer.publicContext,
+                configurationIds = setOf(credentialIdToRequest)
+            )
+            val otherCredentialIdToRequest = it.mapper.toCredentialIdentifier(AtomicAttribute2023, ISO_MDOC)
+            // important step: mess with the authorization details
+            val authorizationDetails = it.client.buildAuthorizationDetails(
+                credentialConfigurationId = otherCredentialIdToRequest,
+                authorizationServers = it.issuer.metadata.authorizationServers
+            )
+            shouldThrow<OAuth2Exception.InvalidAuthorizationDetails> {
+                it.getToken(credentialOffer, authorizationDetails)
+            }
+        }
+
     }
 }
