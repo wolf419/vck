@@ -47,6 +47,7 @@ import io.github.aakira.napier.Napier
 import io.ktor.http.*
 import io.matthewnelson.encoding.core.Encoder.Companion.encodeToString
 import kotlinx.serialization.json.JsonObject
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 
 
@@ -105,7 +106,8 @@ class SimpleAuthorizationService(
     /** Associates issued codes with the auth request from the client. */
     private val codeToClientAuthRequest: MapStore<String, ClientAuthRequest> = DefaultMapStore(),
     /** Associates issued refresh tokens with the auth request from the client. *Refresh tokens are usually long-lived!* */
-    private val refreshTokenToAuthRequest: MapStore<String, ClientAuthRequest> = DefaultMapStore(),
+    private val refreshTokenToAuthRequest: MapStore<String, ClientAuthRequest> =
+        DefaultMapStore(lifetime = 30.days),
     /** Associates the issued request_uri to the auth request from the client. */
     private val requestUriToPushedAuthorizationRequest: MapStore<String, AuthenticationRequestParameters> = DefaultMapStore(),
     /** Service to create and validate access tokens. */

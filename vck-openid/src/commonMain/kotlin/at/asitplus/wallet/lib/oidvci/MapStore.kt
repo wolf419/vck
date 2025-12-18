@@ -2,6 +2,10 @@ package at.asitplus.wallet.lib.oidvci
 
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 
 /**
  * Provides a simple map of keys of type [T] to values of type [U].
@@ -31,18 +35,65 @@ interface MapStore<T, U> {
 
 /**
  * Holds simple [map] in memory, protected with a [Mutex],
+ * with all entries having a lifetime of [lifetime],
  * to ensure a basic form of thread-safety.
  */
-class DefaultMapStore<T, U> : MapStore<T, U> {
+class DefaultMapStore<T, U>(
+    val lifetime: Duration = 10.minutes,
+    val clock: Clock = Clock.System,
+    /** Will check for expired entries when map reaches [sizeToCheckForExpiration] entries */
+    val sizeToCheckForExpiration: UInt = 100U,
+) : MapStore<T, U> {
 
-    private val mutex = Mutex()
-    private val map = mutableMapOf<T, U>()
-
-    override suspend fun put(key: T, value: U) {
-        mutex.withLock { map.put(key, value) }
+    init {
+        require(lifetime > Duration.ZERO) { "lifetime must be > 0" }
     }
 
-    override suspend fun get(key: T) = map[key]
+    data class Holder<U>(
+        val value: U,
+        val expiration: Instant,
+    )
 
-    override suspend fun remove(key: T): U? = mutex.withLock { map.remove(key) }
+    private val mutex = Mutex()
+    private val map = mutableMapOf<T, Holder<U>>()
+
+    override suspend fun put(key: T, value: U) {
+        mutex.withLock {
+            map[key] = Holder(value, clock.now() + lifetime)
+            if (map.size >= sizeToCheckForExpiration.toInt()) {
+                cleanupExpiredLocked()
+            }
+        }
+    }
+
+    private fun cleanupExpiredLocked() {
+        map.entries.iterator().let {
+            while (it.hasNext()) {
+                if (it.next().value.expiration < clock.now()) {
+                    it.remove()
+                }
+            }
+        }
+    }
+
+    override suspend fun get(key: T) = mutex.withLock {
+        map[key]?.let { entry ->
+            if (entry.expiration < clock.now()) {
+                map.remove(key)
+                null
+            } else {
+                entry.value
+            }
+        }
+    }
+
+    override suspend fun remove(key: T): U? = mutex.withLock {
+        map.remove(key)?.let { entry ->
+            if (entry.expiration < clock.now()) {
+                null
+            } else {
+                entry.value
+            }
+        }
+    }
 }
