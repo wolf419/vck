@@ -15,6 +15,15 @@ Release 5.11.0 (unreleased):
    - Use DPoP proofs on client calls
  - Token status list:
    - CBOR encoded token status list shall not be tagged with 24 like other COSE payloads (`d818` in hex)
+ - Dependency Updates:
+   * Gradle 9.2.0
+   * Kotlin 2.3.0
+   * Dokka 2.10.0
+   * Return value checker defaults to `check`
+   * AGP 8.12.3
+   * Ktor 3.3.3
+   * Bouncy Castle 1.83 (no more forcing exact version)
+   * TestBalloon 0.7.1-K2.3.0
 
 Release 5.10.1:
  - Proximity presentations:
