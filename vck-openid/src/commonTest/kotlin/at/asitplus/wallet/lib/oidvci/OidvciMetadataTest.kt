@@ -44,7 +44,7 @@ val OidvciMetadataTest by testSuite {
                 get("credential_configurations_supported").shouldNotBeNull().jsonObject.apply {
                     get("org.iso.18013.5.1").shouldNotBeNull().jsonObject.apply {
                         get("credential_signing_alg_values_supported").shouldNotBeNull().jsonArray.apply {
-                            shouldHaveSingleElement(JsonPrimitive(-7))
+                            shouldHaveSingleElement(JsonPrimitive(-9))
                         }
                     }
                 }
