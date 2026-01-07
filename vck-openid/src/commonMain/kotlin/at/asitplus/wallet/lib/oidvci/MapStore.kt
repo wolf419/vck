@@ -34,9 +34,10 @@ interface MapStore<T, U> {
 
 
 /**
- * Holds simple [map] in memory, protected with a [Mutex],
- * with all entries having a lifetime of [lifetime],
- * to ensure a basic form of thread-safety.
+ * Holds simple [map] in memory, with all entries having a lifetime of [lifetime],
+ * protected with a [Mutex], to ensure a basic form of thread-safety.
+ * Beware that array types are neither supported as the key type `T` nor the value type `U`,
+ * as this would mess up equality checks (and should not be needed anyway).
  */
 class DefaultMapStore<T, U>(
     val lifetime: Duration = 10.minutes,
@@ -52,12 +53,19 @@ class DefaultMapStore<T, U>(
     data class Holder<U>(
         val value: U,
         val expiration: Instant,
-    )
+    ) {
+        init {
+            require(value !is Array<*>) { "Arrays are not supported as values" }
+        }
+    }
 
     private val mutex = Mutex()
     private val map = mutableMapOf<T, Holder<U>>()
 
+    /** Throws when using array types, as this is the best we can do with the type system as it is now. */
     override suspend fun put(key: T, value: U) {
+        require(value !is Array<*>) { "Arrays are not supported as values" }
+        require(key !is Array<*>) { "Arrays are not supported as keys" }
         mutex.withLock {
             map[key] = Holder(value, clock.now() + lifetime)
             if (map.size >= sizeToCheckForExpiration.toInt()) {
