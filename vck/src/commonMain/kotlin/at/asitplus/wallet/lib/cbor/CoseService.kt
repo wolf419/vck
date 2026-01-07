@@ -31,6 +31,38 @@ fun interface CoseHeaderIdentifierFun<T> {
     ): CoseHeader?
 }
 
+/** How to extract the algorithm from [KeyMaterial] */
+fun interface CoseHeaderAlgorithmExtractor {
+    suspend operator fun invoke(
+        keyMaterial: KeyMaterial,
+    ): CoseAlgorithm
+}
+
+/**
+ * Workaround for other implementations not supporting fully specified algorithms from
+ * [RFC 9864](https://datatracker.ietf.org/doc/html/rfc9864), so we'll be using the non-fully specified ones.
+ */
+object LegacyCoseHeaderAlgorithmExtractor : CoseHeaderAlgorithmExtractor {
+    override suspend fun invoke(keyMaterial: KeyMaterial): CoseAlgorithm =
+        keyMaterial.signatureAlgorithm.toCoseAlgorithm().getOrThrow().notFullySpecified()
+
+    private fun CoseAlgorithm.Signature.notFullySpecified() = when (this) {
+        CoseAlgorithm.Signature.ESP256 -> CoseAlgorithm.Signature.ES256
+        CoseAlgorithm.Signature.ESP384 -> CoseAlgorithm.Signature.ES384
+        CoseAlgorithm.Signature.ESP512 -> CoseAlgorithm.Signature.ES512
+        else -> this
+    }
+}
+
+/**
+ * Extract the algorithm from [KeyMaterial] directly, using fully specified algorithms when applicable,
+ * see [RFC 9864](https://datatracker.ietf.org/doc/html/rfc9864). */
+object FullySpecifiedCoseHeaderAlgorithmExtractor : CoseHeaderAlgorithmExtractor {
+    override suspend fun invoke(keyMaterial: KeyMaterial): CoseAlgorithm =
+        keyMaterial.signatureAlgorithm.toCoseAlgorithm().getOrThrow()
+
+}
+
 /** Don't identify [KeyMaterial] in [CoseHeader]. */
 class CoseHeaderNone<T> : CoseHeaderIdentifierFun<T> {
     override suspend fun invoke(
@@ -76,6 +108,7 @@ class SignCose<P : Any>(
     val keyMaterial: KeyMaterial,
     val protectedHeaderModifier: CoseHeaderIdentifierFun<KeyMaterial>? = null,
     val unprotectedHeaderModifier: CoseHeaderIdentifierFun<KeyMaterial>? = null,
+    val algorithmExtractor: CoseHeaderAlgorithmExtractor = LegacyCoseHeaderAlgorithmExtractor,
 ) : SignCoseFun<P> {
     override suspend operator fun invoke(
         protectedHeader: CoseHeader?,
@@ -83,8 +116,7 @@ class SignCose<P : Any>(
         payload: P?,
         serializer: KSerializer<P>,
     ): KmmResult<CoseSigned<P>> = catching {
-        val algorithm = keyMaterial.signatureAlgorithm.toCoseAlgorithm().getOrThrow()
-        val headerWithAlg = (protectedHeader ?: CoseHeader()).copy(algorithm = algorithm)
+        val headerWithAlg = (protectedHeader ?: CoseHeader()).copy(algorithm = algorithmExtractor.invoke(keyMaterial))
         val protectedHeader = protectedHeaderModifier?.invoke(headerWithAlg, keyMaterial) ?: headerWithAlg
         val unprotectedHeader = unprotectedHeaderModifier?.invoke(unprotectedHeader ?: CoseHeader(), keyMaterial)
             ?: unprotectedHeader
@@ -153,6 +185,7 @@ class SignCoseDetached<P : Any>(
     val keyMaterial: KeyMaterial,
     val protectedHeaderModifier: CoseHeaderIdentifierFun<KeyMaterial>? = null,
     val unprotectedHeaderModifier: CoseHeaderIdentifierFun<KeyMaterial>? = null,
+    val algorithmExtractor: CoseHeaderAlgorithmExtractor = LegacyCoseHeaderAlgorithmExtractor,
 ) : SignCoseDetachedFun<P> {
     override suspend operator fun invoke(
         protectedHeader: CoseHeader?,
@@ -160,8 +193,7 @@ class SignCoseDetached<P : Any>(
         payload: P?,
         serializer: KSerializer<P>,
     ) = catching {
-        val algorithm = keyMaterial.signatureAlgorithm.toCoseAlgorithm().getOrThrow()
-        val headerWithAlg = (protectedHeader ?: CoseHeader()).copy(algorithm = algorithm)
+        val headerWithAlg = (protectedHeader ?: CoseHeader()).copy(algorithm = algorithmExtractor.invoke(keyMaterial))
         val protectedHeader = protectedHeaderModifier?.invoke(headerWithAlg, keyMaterial) ?: headerWithAlg
         val unprotectedHeader = unprotectedHeaderModifier?.invoke(unprotectedHeader ?: CoseHeader(), keyMaterial)
             ?: unprotectedHeader

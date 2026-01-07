@@ -1,24 +1,37 @@
 package at.asitplus.wallet.lib.cbor
 
 import at.asitplus.signum.HazardousMaterials
-import at.asitplus.signum.indispensable.*
-import at.asitplus.signum.indispensable.cosef.*
+import at.asitplus.signum.indispensable.CryptoSignature
+import at.asitplus.signum.indispensable.ECCurve
+import at.asitplus.signum.indispensable.X509SignatureAlgorithm
+import at.asitplus.signum.indispensable.cosef.CoseHeader
+import at.asitplus.signum.indispensable.cosef.CoseInput
+import at.asitplus.signum.indispensable.cosef.CoseSigned
 import at.asitplus.signum.indispensable.cosef.io.coseCompliantSerializer
+import at.asitplus.signum.indispensable.cosef.toCoseAlgorithm
+import at.asitplus.signum.indispensable.cosef.toCoseKey
+import at.asitplus.signum.indispensable.nativeDigest
+import at.asitplus.signum.indispensable.toJcaPublicKey
 import at.asitplus.signum.supreme.hazmat.jcaPrivateKey
 import at.asitplus.signum.supreme.sign.EphemeralKey
+import at.asitplus.testballoon.invoke
+import at.asitplus.testballoon.minus
 import at.asitplus.wallet.lib.agent.EphemeralKeyWithoutCert
 import com.authlete.cbor.CBORByteArray
 import com.authlete.cbor.CBORDecoder
+import com.authlete.cbor.CBORItem
 import com.authlete.cbor.CBORTaggedItem
-import com.authlete.cose.*
+import com.authlete.cose.COSEProtectedHeaderBuilder
+import com.authlete.cose.COSESign1
+import com.authlete.cose.COSESign1Builder
+import com.authlete.cose.COSESigner
+import com.authlete.cose.COSEVerifier
+import com.authlete.cose.SigStructureBuilder
 import com.authlete.cose.constants.COSEAlgorithms
 import com.benasher44.uuid.uuid4
-import io.kotest.assertions.withClue
 import de.infix.testBalloon.framework.core.testSuite
-import at.asitplus.testballoon.*
-import io.kotest.matchers.collections.shouldHaveSize
-import io.kotest.matchers.shouldBe
-import io.kotest.matchers.types.shouldBeInstanceOf
+import io.kotest.assertions.throwables.shouldThrowAny
+import io.kotest.assertions.withClue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import io.matthewnelson.encoding.base16.Base16
@@ -29,64 +42,49 @@ import java.security.interfaces.ECPublicKey
 
 val CoseServiceJvmTest by testSuite {
 
-    val configurations: List<Pair<String, Int>> =
+    val configurations: List<Pair<EphemeralKey, X509SignatureAlgorithm>> =
         listOf(
-            ("EC" to 256),
-            ("EC" to 384),
-            ("EC" to 521),
+            EphemeralKey {
+                ec {
+                    curve = ECCurve.SECP_256_R_1
+                    digests = setOf(curve.nativeDigest)
+                }
+            }.getOrThrow() to X509SignatureAlgorithm.ES256,
+
+            EphemeralKey {
+                ec {
+                    curve = ECCurve.SECP_384_R_1
+                    digests = setOf(curve.nativeDigest)
+                }
+            }.getOrThrow() to X509SignatureAlgorithm.ES384,
+
+            EphemeralKey {
+                ec {
+                    curve = ECCurve.SECP_521_R_1
+                    digests = setOf(curve.nativeDigest)
+                }
+            }.getOrThrow() to X509SignatureAlgorithm.ES512
         )
 
-    configurations.forEach { thisConfiguration ->
-        val sigAlgo = when (thisConfiguration.first) {
-            "EC" -> when (thisConfiguration.second) {
-                256 -> X509SignatureAlgorithm.ES256
-                384 -> X509SignatureAlgorithm.ES384
-                521 -> X509SignatureAlgorithm.ES512
-                // necessary(compiler), but otherwise redundant else-branch
-                else -> throw IllegalArgumentException("Unknown EC Curve size")
-            }
-
-            else -> throw IllegalArgumentException("Unknown Key Type") // -||-
-        }
-        val ephemeralKey = EphemeralKey {
-            ec {
-                curve = when (thisConfiguration.second) {
-                    256 -> ECCurve.SECP_256_R_1
-                    384 -> ECCurve.SECP_384_R_1
-                    521 -> ECCurve.SECP_521_R_1
-                    // necessary(compiler), but otherwise redundant else-branch
-                    else -> throw IllegalArgumentException("Unknown EC Curve size")
-                }
-                digests = setOf(curve.nativeDigest)
-            }
-        }.getOrThrow()
-
-
+    configurations.forEach { (ephemeralKey, sigAlgo) ->
         val coseAlgorithm = sigAlgo.toCoseAlgorithm().getOrThrow()
         val extLibAlgorithm = when (sigAlgo) {
             X509SignatureAlgorithm.ES256 -> COSEAlgorithms.ES256
             X509SignatureAlgorithm.ES384 -> COSEAlgorithms.ES384
             X509SignatureAlgorithm.ES512 -> COSEAlgorithms.ES512
+            else -> throw IllegalArgumentException("Unknown Algorithm")
         }
-
         val extLibVerifier = COSEVerifier(ephemeralKey.publicKey.toJcaPublicKey().getOrThrow() as ECPublicKey)
-
 
         @OptIn(HazardousMaterials::class)
         val extLibSigner = COSESigner(ephemeralKey.jcaPrivateKey as ECPrivateKey)
-
-
         val keyMaterial = EphemeralKeyWithoutCert(ephemeralKey)
         val signCose = SignCose<ByteArray>(keyMaterial)
         val verifierCoseService = VerifyCoseSignatureWithKey<ByteArray>()
         val coseKey = ephemeralKey.publicKey.toCoseKey().getOrThrow()
-
         val randomPayload = uuid4().toString()
 
-        val testIdentifier = "$sigAlgo, ${thisConfiguration.second}"
-
-        "$testIdentifier:" - {
-
+        "$sigAlgo" - {
             "Signed object from int. library can be verified with int. library" {
                 val signed = signCose(
                     protectedHeader = null,
@@ -95,7 +93,7 @@ val CoseServiceJvmTest by testSuite {
                     serializer = ByteArraySerializer()
                 ).getOrThrow()
 
-                withClue("$sigAlgo: Signature: ${signed.signature.encodeToTlv().toDerHexString()}") {
+                withClue("Signature: ${signed.signature.encodeToTlv().toDerHexString()}") {
                     verifierCoseService(
                         signed,
                         keyMaterial.publicKey.toCoseKey().getOrThrow(),
@@ -120,16 +118,13 @@ val CoseServiceJvmTest by testSuite {
                 extLibVerifier.verify(extLibCoseSign1) shouldBe true
 
                 // Parsing to our structure verifying payload
-                val coseSigned =
-                    CoseSigned.deserialize(ByteArraySerializer(), extLibCoseSign1.encode()).getOrThrow()
-                coseSigned.payload shouldBe randomPayload.encodeToByteArray()
-                val parsedDefLengthSignature = coseSigned.signature as CryptoSignature.EC.DefiniteLength
-                val parsedSig = parsedDefLengthSignature.rawByteArray.encodeToString(Base16())
+                val coseSigned = extLibCoseSign1.toCoseSigned().apply {
+                    payload shouldBe randomPayload.encodeToByteArray()
+                }
+                val parsedSig = coseSigned.signature.encodeToString()
                 val extLibSig = extLibSignature.encodeToString(Base16())
 
-                withClue(
-                    "$sigAlgo: \nSignatures should match\nOurs:\n$parsedSig\nTheirs:\n$extLibSig"
-                ) {
+                withClue("Signatures should match\nOurs:\n$parsedSig\nTheirs:\n$extLibSig") {
                     parsedSig shouldBe extLibSig
                 }
 
@@ -156,9 +151,8 @@ val CoseServiceJvmTest by testSuite {
                     serializer = ByteArraySerializer(),
                 ).getOrThrow()
 
-                val parsed =
-                    CBORDecoder(byteArrayOf(0xD2.toByte()) + coseSigned.serialize(ByteArraySerializer())).next()
-                        .shouldBeInstanceOf<CBORTaggedItem>()
+                val parsed = coseSigned.toCborTaggedItem()
+                    .shouldBeInstanceOf<CBORTaggedItem>()
                 val parsedCoseSign1 = parsed.tagContent
                     .shouldBeInstanceOf<COSESign1>()
                 val parsedPayload = parsedCoseSign1.payload
@@ -166,12 +160,9 @@ val CoseServiceJvmTest by testSuite {
 
                 parsedPayload.value shouldBe randomPayload.encodeToByteArray()
                 val parsedSignature = parsedCoseSign1.signature.value.encodeToString(Base16())
-                val parsedDefLengthSignature = coseSigned.signature as CryptoSignature.EC.DefiniteLength
-                val signature = parsedDefLengthSignature.rawByteArray.encodeToString(Base16())
+                val signature = coseSigned.signature.encodeToString()
                 parsedSignature shouldBe signature
 
-                val extLibSigInput =
-                    SigStructureBuilder().sign1(parsedCoseSign1).build().encode().encodeToString(Base16())
                 val signatureInput = coseCompliantSerializer.encodeToByteArray(
                     CoseInput.serializer(),
                     CoseInput(
@@ -182,19 +173,50 @@ val CoseServiceJvmTest by testSuite {
                     )
                 ).encodeToString(Base16())
 
-                withClue("$sigAlgo: Our input:\n$signatureInput\n Their input:\n$extLibSigInput") {
-                    extLibSigInput
-                        .replace("A1013833", "A1013823") // ESP512 (-52) -> ES512 (-36)
-                        .replace("A1013832", "A1013822") // ESP384 (-51) -> ES384 (-35)
-                        .replace("A10128", "A10126") // ESP256 (-9) -> ES256 (-7)
-                        .shouldBe(signatureInput)
+                val extLibSigInput = parsedCoseSign1.encodeToString()
+                withClue("Our input:\n$signatureInput\n Their input:\n$extLibSigInput") {
+                    extLibSigInput shouldBe signatureInput
                 }
 
-                withClue("$sigAlgo: Signature: $parsedSignature") {
-                    // TODO: Ext. library does not support ESP256 and so on
-                    //extLibVerifier.verify(parsedCoseSign1) shouldBe true
+                withClue("Signature: $parsedSignature") {
+                    extLibVerifier.verify(parsedCoseSign1) shouldBe true
+                }
+            }
+
+            "Signed object from int. library with fully-specified alg cannot be verified with ext. library" {
+                val signCoseFullySpecified = SignCose<ByteArray>(
+                    keyMaterial,
+                    algorithmExtractor = FullySpecifiedCoseHeaderAlgorithmExtractor
+                )
+                val coseSigned = signCoseFullySpecified(
+                    protectedHeader = CoseHeader(algorithm = coseAlgorithm),
+                    unprotectedHeader = null,
+                    payload = randomPayload.encodeToByteArray(),
+                    serializer = ByteArraySerializer(),
+                ).getOrThrow()
+
+                val parsed = coseSigned.toCborTaggedItem()
+                    .shouldBeInstanceOf<CBORTaggedItem>()
+                val parsedCoseSign1 = parsed.tagContent
+                    .shouldBeInstanceOf<COSESign1>()
+
+                // Ext. library can not parse fully-specified COSE algorithms
+                shouldThrowAny {
+                    extLibVerifier.verify(parsedCoseSign1) shouldBe true
                 }
             }
         }
     }
 }
+
+private fun CryptoSignature.RawByteEncodable.encodeToString(): String =
+    (this as CryptoSignature.EC.DefiniteLength).rawByteArray.encodeToString(Base16())
+
+private fun COSESign1.toCoseSigned(): CoseSigned<ByteArray> =
+    CoseSigned.deserialize(ByteArraySerializer(), this.encode()).getOrThrow()
+
+private fun COSESign1.encodeToString(): String =
+    SigStructureBuilder().sign1(this).build().encode().encodeToString(Base16())
+
+private fun CoseSigned<ByteArray>.toCborTaggedItem(): CBORItem? =
+    CBORDecoder(byteArrayOf(0xD2.toByte()) + serialize(ByteArraySerializer())).next()
