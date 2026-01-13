@@ -1,31 +1,33 @@
 package at.asitplus.wallet.lib.jws
 
+import at.asitplus.signum.HazardousMaterials
 import at.asitplus.signum.indispensable.ECCurve
 import at.asitplus.signum.indispensable.X509SignatureAlgorithm
 import at.asitplus.signum.indispensable.io.Base64UrlStrict
 import at.asitplus.signum.indispensable.josef.JwsSigned
+import at.asitplus.signum.indispensable.josef.io.joseCompliantSerializer
 import at.asitplus.signum.indispensable.josef.toJsonWebKey
+import at.asitplus.signum.indispensable.josef.toJwsAlgorithm
 import at.asitplus.signum.indispensable.nativeDigest
 import at.asitplus.signum.indispensable.toJcaPublicKey
-import at.asitplus.signum.HazardousMaterials
-import at.asitplus.signum.indispensable.josef.io.joseCompliantSerializer
-import at.asitplus.signum.indispensable.josef.toJwsAlgorithm
 import at.asitplus.signum.supreme.hazmat.jcaPrivateKey
 import at.asitplus.signum.supreme.sign.EphemeralKey
+import at.asitplus.testballoon.invoke
+import at.asitplus.testballoon.minus
 import at.asitplus.wallet.lib.agent.EphemeralKeyWithoutCert
 import com.benasher44.uuid.uuid4
-import com.nimbusds.jose.*
+import com.nimbusds.jose.JOSEObjectType
+import com.nimbusds.jose.JWSAlgorithm
+import com.nimbusds.jose.JWSHeader
+import com.nimbusds.jose.JWSObject
+import com.nimbusds.jose.Payload
 import com.nimbusds.jose.crypto.ECDSASigner
 import com.nimbusds.jose.crypto.ECDSAVerifier
 import com.nimbusds.jose.crypto.RSASSASigner
 import com.nimbusds.jose.crypto.RSASSAVerifier
 import com.nimbusds.jose.jwk.JWK
-import io.kotest.assertions.withClue
 import de.infix.testBalloon.framework.core.testSuite
-import at.asitplus.testballoon.*
-import io.kotest.matchers.collections.shouldHaveSize
-import io.kotest.matchers.shouldBe
-import io.kotest.matchers.types.shouldBeInstanceOf
+import io.kotest.assertions.withClue
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.matthewnelson.encoding.core.Encoder.Companion.encodeToString
@@ -81,7 +83,7 @@ val JwsServiceJvmTest by testSuite {
             }
 
             val ephemeralKey = EphemeralKey {
-                if (algo.isEc)
+                if (algo is X509SignatureAlgorithm.ECDSA)
                     ec {
                         curve = when (thisConfiguration.second) {
                             256 -> ECCurve.SECP_256_R_1
@@ -97,13 +99,12 @@ val JwsServiceJvmTest by testSuite {
                     }
             }.getOrThrow()
 
-            val jvmVerifier =
-                if (algo.isEc) ECDSAVerifier(ephemeralKey.publicKey.toJcaPublicKey().getOrThrow() as ECPublicKey)
-                else RSASSAVerifier(ephemeralKey.publicKey.toJcaPublicKey().getOrThrow() as RSAPublicKey)
-            val jvmSigner =
-                if (algo.isEc) ECDSASigner(ephemeralKey.jcaPrivateKey as ECPrivateKey)
-                else RSASSASigner(ephemeralKey.jcaPrivateKey as RSAPrivateKey)
-
+            val jvmVerifier = if (algo is X509SignatureAlgorithm.ECDSA)
+                ECDSAVerifier(ephemeralKey.publicKey.toJcaPublicKey().getOrThrow() as ECPublicKey)
+            else RSASSAVerifier(ephemeralKey.publicKey.toJcaPublicKey().getOrThrow() as RSAPublicKey)
+            val jvmSigner = if (algo is X509SignatureAlgorithm.ECDSA)
+                ECDSASigner(ephemeralKey.jcaPrivateKey as ECPrivateKey)
+            else RSASSASigner(ephemeralKey.jcaPrivateKey as RSAPrivateKey)
 
             val jwsSigner = SignJwt<JsonPrimitive>(EphemeralKeyWithoutCert(ephemeralKey), JwsHeaderCertOrJwk())
             val verifyJwsSignatureObject = VerifyJwsObject()
@@ -124,7 +125,7 @@ val JwsServiceJvmTest by testSuite {
                 }
 
                 "Signed object from ext. library can be verified with int. library" {
-                    val libHeader = JWSHeader.Builder(JWSAlgorithm(algo.toJwsAlgorithm().getOrThrow().identifier ) )
+                    val libHeader = JWSHeader.Builder(JWSAlgorithm(algo.toJwsAlgorithm().getOrThrow().identifier))
                         .type(JOSEObjectType("JWT"))
                         .jwk(JWK.parse(joseCompliantSerializer.encodeToString(ephemeralKey.publicKey.toJsonWebKey())))
                         .build()
@@ -135,7 +136,8 @@ val JwsServiceJvmTest by testSuite {
 
                     // Parsing to our structure verifying payload
                     val signedLibObject = libObject.serialize()
-                    val parsedJwsSigned = JwsSigned.deserialize<JsonElement>(JsonElement.serializer(), signedLibObject).getOrThrow()
+                    val parsedJwsSigned =
+                        JwsSigned.deserialize<JsonElement>(JsonElement.serializer(), signedLibObject).getOrThrow()
                     parsedJwsSigned.payload.jsonPrimitive.content shouldBe randomPayload.content
                     val parsedSig = parsedJwsSigned.signature.rawByteArray.encodeToString(Base64UrlStrict)
 

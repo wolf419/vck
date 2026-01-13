@@ -27,7 +27,7 @@ val JweSerializationTest by testSuite {
         val serialized = joseCompliantSerializer.encodeToString(jweHeader)
 
         serialized shouldContain """"${algorithm.identifier}""""
-        serialized shouldContain """"${encryption.text}""""
+        serialized shouldContain """"${encryption.identifier}""""
         serialized shouldContain """"$kid""""
         serialized shouldContain """"$type""""
     }
@@ -37,7 +37,7 @@ val JweSerializationTest by testSuite {
         val algorithm = JweAlgorithm.ECDH_ES
         val encryption = JweEncryption.A256GCM
         val type = JwsContentTypeConstants.JWT
-        val serialized = """{"alg": "${algorithm.identifier}", "enc": "${encryption.text}", "kid": "$kid", "typ": "$type"}"""
+        val serialized = """{"alg": "${algorithm.identifier}", "enc": "${encryption.identifier}", "kid": "$kid", "typ": "$type"}"""
 
         val parsed = joseCompliantSerializer.decodeFromString<JweHeader>(serialized)
 
@@ -51,7 +51,7 @@ val JweSerializationTest by testSuite {
         val kid = uuid4().toString()
         val encryption = JweEncryption.A256GCM
         val type = JwsContentTypeConstants.JWT
-        val serialized = """{"alg": "foo", "enc": "${encryption.text}", "kid": "$kid", "typ": "$type"}"""
+        val serialized = """{"alg": "foo", "enc": "${encryption.identifier}", "kid": "$kid", "typ": "$type"}"""
 
         val parsed = joseCompliantSerializer.decodeFromString<JweHeader>(serialized)
 
@@ -80,7 +80,7 @@ val JweSerializationTest by testSuite {
         val algorithm = JweAlgorithm.ECDH_ES
         val encryption = JweEncryption.A256GCM
         val type = uuid4().toString()
-        val serialized = """{"alg": "${algorithm.identifier}", "enc": "${encryption.text}", "kid": "$kid", "typ": "$type"}"""
+        val serialized = """{"alg": "${algorithm.identifier}", "enc": "${encryption.identifier}", "kid": "$kid", "typ": "$type"}"""
 
         val parsed = joseCompliantSerializer.decodeFromString<JweHeader>(serialized)
 

@@ -29,7 +29,7 @@ data class NFCHandover(
     }
 
     override fun hashCode(): Int {
-        var result = handoverSelect?.contentHashCode() ?: 0
+        var result = handoverSelect.contentHashCode()
         result = 31 * result + (handoverRequest?.contentHashCode() ?: 0)
         return result
     }

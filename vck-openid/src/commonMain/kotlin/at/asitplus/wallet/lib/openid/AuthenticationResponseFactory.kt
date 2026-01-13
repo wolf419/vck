@@ -145,6 +145,7 @@ internal class AuthenticationResponseFactory(
         }
     }
 
+    @Suppress("DEPRECATION")
     private suspend fun encrypt(
         request: RequestParametersFrom<AuthenticationRequestParameters>,
         response: AuthenticationResponse,

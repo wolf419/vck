@@ -25,6 +25,7 @@ import io.kotest.matchers.collections.shouldBeSingleton
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.types.shouldBeInstanceOf
+import kotlin.collections.listOf
 
 val OidvciOfferCodeTest by testSuite {
 
@@ -131,7 +132,10 @@ val OidvciOfferCodeTest by testSuite {
         }
 
         test("process with code after credential offer, and scope for all credentials") {
-            val credentialOffer = it.authorizationService.credentialOfferWithAuthorizationCode(it.issuer.publicContext)
+            val credentialOffer = it.authorizationService.credentialOfferWithAuthorizationCode(
+                credentialIssuer = it.issuer.publicContext,
+                configurationIds = listOf(),
+            )
             val credentialIdToRequest = credentialOffer.configurationIds.first()
             val credentialFormat = it.issuer.metadata.supportedCredentialConfigurations!![credentialIdToRequest]
                 .shouldNotBeNull()
@@ -157,7 +161,10 @@ val OidvciOfferCodeTest by testSuite {
         }
 
         test("process with code after credential offer, wrong issuer_state") {
-            val credentialOffer = it.authorizationService.credentialOfferWithAuthorizationCode(it.issuer.publicContext)
+            val credentialOffer = it.authorizationService.credentialOfferWithAuthorizationCode(
+                credentialIssuer = it.issuer.publicContext,
+                configurationIds = listOf(),
+            )
             val credentialIdToRequest = credentialOffer.configurationIds.first()
             val credentialFormat =
                 it.issuer.metadata.supportedCredentialConfigurations!![credentialIdToRequest].shouldNotBeNull()
@@ -175,7 +182,10 @@ val OidvciOfferCodeTest by testSuite {
         }
 
         test("process with code after credential offer, and authorization details for one credential") {
-            val credentialOffer = it.authorizationService.credentialOfferWithAuthorizationCode(it.issuer.publicContext)
+            val credentialOffer = it.authorizationService.credentialOfferWithAuthorizationCode(
+                credentialIssuer = it.issuer.publicContext,
+                configurationIds = listOf(),
+            )
             val credentialIdToRequest = credentialOffer.configurationIds.first()
             val authorizationDetails = it.client.buildAuthorizationDetails(
                 credentialConfigurationId = credentialIdToRequest,

@@ -43,7 +43,7 @@ kotlin {
 
         jvmTest {
             dependencies {
-                api("at.asitplus.signum:indispensable-josef:${VcLibVersions.signum}")
+                implementation("at.asitplus.signum:indispensable-josef:${VcLibVersions.signum}")
                 implementation("org.json:json:${VcLibVersions.Jvm.json}")
             }
         }

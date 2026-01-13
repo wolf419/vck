@@ -26,7 +26,7 @@ class SameScopeCredentialSchemeMapper(
         scheme.toSupportedCredentialFormatWithSameScope(scope)
 
     override fun decodeFromCredentialIdentifier(input: String): Pair<CredentialScheme, CredentialRepresentation>? =
-        CredentialSchemeMapping.decodeFromCredentialIdentifier(input)
+        DefaultCredentialSchemeMapper().decodeFromCredentialIdentifier(input)
 
     override fun encodeToCredentialIdentifier(type: String, format: CredentialFormatEnum): String =
         "${type.replace(" ", "_")}#${format.text}"
@@ -58,9 +58,9 @@ private fun CredentialScheme.toSupportedCredentialFormatWithSameScope(scope: Str
         }
     } else null
     val jwtVc = if (supportsVcJwt) {
-        with(encodeToCredentialIdentifier(vcType!!, CredentialFormatEnum.JWT_VC)) {
+        with(encodeToCredentialIdentifier(vcType!!, JWT_VC)) {
             this to SupportedCredentialFormat.forVcJwt(
-                format = CredentialFormatEnum.JWT_VC,
+                format = JWT_VC,
                 scope = scope,
                 credentialDefinition = SupportedCredentialFormatDefinition(
                     types = setOf(VcDataModelConstants.VERIFIABLE_CREDENTIAL, vcType!!),
@@ -73,9 +73,9 @@ private fun CredentialScheme.toSupportedCredentialFormatWithSameScope(scope: Str
         }
     } else null
     val sdJwt = if (supportsSdJwt) {
-        with(encodeToCredentialIdentifier(sdJwtType!!, CredentialFormatEnum.DC_SD_JWT)) {
+        with(encodeToCredentialIdentifier(sdJwtType!!, DC_SD_JWT)) {
             this to SupportedCredentialFormat.forSdJwt(
-                format = CredentialFormatEnum.DC_SD_JWT,
+                format = DC_SD_JWT,
                 scope = scope,
                 sdJwtVcType = sdJwtType!!,
                 supportedBindingMethods = setOf(BINDING_METHOD_JWK, URN_TYPE_JWK_THUMBPRINT),

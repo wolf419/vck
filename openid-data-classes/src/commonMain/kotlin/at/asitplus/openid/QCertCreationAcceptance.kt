@@ -95,7 +95,7 @@ data class QCertCreationAcceptance(
         var result = qcTermsConditionsUri.hashCode()
         result = 31 * result + qcHash.contentHashCode()
         result = 31 * result + qcHashAlgorithmOid.hashCode()
-        result = 31 * result + (credentialIds?.hashCode() ?: 0)
+        result = 31 * result + credentialIds.hashCode()
         result = 31 * result + (transactionDataHashAlgorithms?.hashCode() ?: 0)
         return result
     }

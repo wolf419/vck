@@ -58,6 +58,7 @@ import at.asitplus.wallet.lib.agent.VerifySignatureFun
 import at.asitplus.wallet.lib.data.vckJsonSerializer
 import io.matthewnelson.encoding.core.Encoder.Companion.encodeToByteArray
 import kotlinx.serialization.SerializationStrategy
+import kotlin.io.encoding.Base64
 
 
 /** Modify the [JwsHeader] before it being signed. */
@@ -268,7 +269,7 @@ object JweUtils {
 
         val headerSerialized = joseCompliantSerializer.encodeToString(jweHeader)
         val aad = headerSerialized.encodeToByteArray()
-        val aadForCipher = aad.encodeToByteArray(Base64UrlStrict)
+        val aadForCipher = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT).encodeToByteArray(aad)
         val bytes = payload.encodeToByteArray()
         val sealedBox = key.encrypt(data = bytes, authenticatedData = aadForCipher).getOrThrow()
 
@@ -295,7 +296,7 @@ object JweUtils {
         require(algorithm.isAuthenticated())
         val key = algorithm.keyFromIntermediate(intermediateKey)
         val iv = jweObject.iv
-        val aad = jweObject.headerAsParsed.encodeToByteArray(Base64UrlStrict)
+        val aad = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT).encodeToByteArray(jweObject.headerAsParsed)
         val ciphertext = jweObject.ciphertext
         val authTag = jweObject.authTag
         val plaintext = key.decrypt(iv, ciphertext, authTag, aad).getOrThrow()
@@ -326,7 +327,7 @@ object JweUtils {
         )
         val headerSerialized = joseCompliantSerializer.encodeToString(headerWithContentKeyParams)
         val aad = headerSerialized.encodeToByteArray()
-        val aadForCipher = aad.encodeToByteArray(Base64UrlStrict)
+        val aadForCipher = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT).encodeToByteArray(aad)
         val bytes = payload.encodeToByteArray()
         val sealedBox = contentKey.encrypt(bytes, aadForCipher).getOrThrow()
 
@@ -390,7 +391,7 @@ object JweUtils {
         }
 
         val iv = jweObject.iv
-        val aad = jweObject.headerAsParsed.encodeToByteArray(Base64UrlStrict)
+        val aad = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT).encodeToByteArray(jweObject.headerAsParsed)
         val ciphertext = jweObject.ciphertext
         val authTag = jweObject.authTag
         val plaintext = contentKey.decrypt(iv, ciphertext, authTag, aad).getOrThrow()

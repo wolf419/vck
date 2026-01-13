@@ -197,7 +197,7 @@ val OpenId4VpInteropTest by testSuite {
                     issuedAt.shouldNotBeNull()
                     expiration.shouldNotBeNull()
                     verifiableCredentialType.shouldNotBeNull()
-                    selectiveDisclosureAlgorithm shouldBe it.sdAlgorithm?.toIanaName()
+                    selectiveDisclosureAlgorithm shouldBe it.sdAlgorithm.toIanaName()
                     confirmationClaim.shouldNotBeNull().apply {
                         jsonWebKey.shouldNotBeNull()
                     }

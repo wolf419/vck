@@ -66,7 +66,7 @@ val JwsHeaderSerializationTest by testSuite {
             | "x5c":["${first.encodeToDer().encodeToString(Base64Strict)}","${second.encodeToDer().encodeToString(Base64Strict)}"]}
             | """.trimMargin()
 
-        val parsed = JwsHeader.deserialize(serialized).getOrThrow()
+        val parsed = joseCompliantSerializer.decodeFromString<JwsHeader>(serialized)
 
         parsed.algorithm shouldBe algorithm
         parsed.keyId shouldBe kid

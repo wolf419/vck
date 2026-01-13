@@ -125,7 +125,7 @@ data class DCQLIsoMdocClaimsQuery(
                     is UShort -> value.toLong() == it.long
                     is Int -> value.toLong() == it.long
                     is UInt -> value.toLong() == it.long
-                    is Long -> value.toLong() == it.long
+                    is Long -> value == it.long
                     is ULong -> value.toLong() == it.long
                     is BigInteger -> value == BigInteger(it.long)
                     else -> false
