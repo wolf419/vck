@@ -118,10 +118,8 @@ val AgentRevocationTest by testSuite {
                 time = timestamp,
             )
             providedToken.shouldBeInstanceOf<StatusListCwt>()
-                .value.payload.shouldNotBeNull().apply {
-                    coseCompliantSerializer.decodeFromByteArray<StatusListTokenPayload>(this)
-                        .statusList shouldBe issuedToken.payload.statusList
-                }
+                .payload.getOrThrow().statusList shouldBe issuedToken.payload.statusList
+
         }
 
 

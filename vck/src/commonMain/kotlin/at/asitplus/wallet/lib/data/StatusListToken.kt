@@ -13,6 +13,7 @@ import kotlin.time.Instant
 
 sealed class StatusListToken {
     abstract val resolvedAt: Instant?
+    abstract val payload: KmmResult<StatusListTokenPayload>
 
     /**
      * Validate the Status List Token:
