@@ -31,7 +31,6 @@ import at.asitplus.wallet.lib.oidvci.CodeService
 import at.asitplus.wallet.lib.oidvci.CredentialIssuer
 import at.asitplus.wallet.lib.oidvci.DefaultCodeService
 import at.asitplus.wallet.lib.oidvci.DefaultMapStore
-import at.asitplus.wallet.lib.oidvci.DefaultNonceService
 import at.asitplus.wallet.lib.oidvci.MapStore
 import at.asitplus.wallet.lib.oidvci.OAuth2AuthorizationServerAdapter
 import at.asitplus.wallet.lib.oidvci.OAuth2Exception
@@ -111,7 +110,7 @@ class SimpleAuthorizationService(
     /** Associates the issued request_uri to the auth request from the client. */
     private val requestUriToPushedAuthorizationRequest: MapStore<String, AuthenticationRequestParameters> = DefaultMapStore(),
     /** Service to create and validate access tokens. */
-    private val tokenService: TokenService = TokenService.bearer(nonceService = DefaultNonceService()),
+    private val tokenService: TokenService = TokenService.bearer(),
     /** Handles client authentication in [par] and [token]. */
     private val clientAuthenticationService: ClientAuthenticationService = ClientAuthenticationService(
         enforceClientAuthentication = false,

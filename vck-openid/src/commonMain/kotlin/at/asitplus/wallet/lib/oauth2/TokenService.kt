@@ -10,6 +10,7 @@ import at.asitplus.wallet.lib.oidvci.DefaultNonceService
 import at.asitplus.wallet.lib.oidvci.NonceService
 import at.asitplus.wallet.lib.oidvci.OAuth2Exception.InvalidGrant
 import io.github.aakira.napier.Napier
+import kotlin.time.Duration.Companion.days
 
 /**
  * Access token service that combines generation and verification,
@@ -85,6 +86,7 @@ interface TokenService {
         fun jwt(
             publicContext: String = "https://wallet.a-sit.at/authorization-server",
             nonceService: NonceService = DefaultNonceService(),
+            refreshTokenNonceService: NonceService = DefaultNonceService(lifetime = 30.days),
             dpopNonceService: NonceService = DefaultNonceService(),
             keyMaterial: KeyMaterial = EphemeralKeyWithoutCert(),
             issueRefreshTokens: Boolean = false,
@@ -92,6 +94,7 @@ interface TokenService {
         ) = JwtTokenService(
             generation = JwtTokenGenerationService(
                 nonceService = nonceService,
+                refreshTokenNonceService = refreshTokenNonceService,
                 dpopNonceService = dpopNonceService,
                 publicContext = publicContext,
                 keyMaterial = keyMaterial,
@@ -99,6 +102,7 @@ interface TokenService {
             ),
             verification = JwtTokenVerificationService(
                 nonceService = nonceService,
+                refreshTokenNonceService = refreshTokenNonceService,
                 dpopNonceService = dpopNonceService,
                 issuerKey = keyMaterial.jsonWebKey,
             ),

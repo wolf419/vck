@@ -12,14 +12,14 @@ val DefaultMapStoreTest by testSuite {
     test("simple types are working") {
         with(
             DefaultMapStore<String, String>(
-                lifetime = 1.milliseconds,
+                lifetime = 20.milliseconds,
                 sizeToCheckForExpiration = 1U
             )
         ) {
             val key = uuid4().toString()
             get(key).shouldBeNull()
             put(key, "value")
-            delay(10.milliseconds)
+            delay(50.milliseconds)
             get(key).shouldBeNull()
         }
     }

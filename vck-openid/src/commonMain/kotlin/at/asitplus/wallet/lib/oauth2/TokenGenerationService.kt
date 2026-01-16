@@ -19,7 +19,6 @@ import at.asitplus.wallet.lib.oidvci.DefaultNonceService
 import at.asitplus.wallet.lib.oidvci.MapStore
 import at.asitplus.wallet.lib.oidvci.NonceService
 import at.asitplus.wallet.lib.oidvci.OAuth2Exception.InvalidDpopProof
-import at.asitplus.wallet.lib.oidvci.OAuth2Exception.UseDpopNonce
 import kotlin.time.Clock
 import kotlin.time.Clock.System
 import kotlin.time.Duration.Companion.days
@@ -47,9 +46,11 @@ interface TokenGenerationService {
  */
 class JwtTokenGenerationService(
     /** Used to create nonces for tokens during issuing. */
-    internal val nonceService: NonceService = DefaultNonceService(),
+    internal val nonceService: NonceService,
+    /** Used to create nonces for refresh tokens during issuing, which are long-lived. */
+    internal val refreshTokenNonceService: NonceService,
     /** Used to create nonces for DPoP proofs of clients. */
-    internal val dpopNonceService: NonceService = DefaultNonceService(),
+    internal val dpopNonceService: NonceService,
     /** Used as issuer for issued DPoP tokens. */
     internal val publicContext: String = "https://wallet.a-sit.at/authorization-server",
     /** Key material used to sign the DPoP tokens in [signToken]. */
@@ -62,6 +63,9 @@ class JwtTokenGenerationService(
     private val issueRefreshToken: Boolean = false,
     /** Maps the issued token's `jwtId` to the user info. */
     private val jwtIdToUserInfoExtended: MapStore<String, OidcUserInfoExtended> = DefaultMapStore(),
+    /** Maps the issued refresh token's `jwtId` (long-lived!) to the user info. */
+    private val refreshTokenJwtIdToUserInfoExtended: MapStore<String, OidcUserInfoExtended> =
+        DefaultMapStore(lifetime = 30.days),
 ) : TokenGenerationService {
 
     override suspend fun buildToken(
@@ -81,8 +85,8 @@ class JwtTokenGenerationService(
                 JwsContentTypeConstants.RT_JWT,
                 OpenId4VciAccessToken(
                     issuer = publicContext,
-                    jwtId = nonceService.provideNonce().also {
-                        jwtIdToUserInfoExtended.put(it, userInfo)
+                    jwtId = refreshTokenNonceService.provideNonce().also {
+                        refreshTokenJwtIdToUserInfoExtended.put(it, userInfo)
                     },
                     notBefore = notBefore,
                     expiration = notBefore.plus(30.days),
@@ -124,7 +128,8 @@ class JwtTokenGenerationService(
     private val JsonWebKey.jwkThumbprintPlain
         get() = this.jwkThumbprint.removePrefix("urn:ietf:params:oauth:jwk-thumbprint:sha256:")
 
-    suspend fun getUserInfoExtended(jwtId: String) = jwtIdToUserInfoExtended.remove(jwtId)
+    suspend fun getUserInfoExtended(jwtId: String) =
+        jwtIdToUserInfoExtended.remove(jwtId) ?: refreshTokenJwtIdToUserInfoExtended.remove(jwtId)
 
     override suspend fun dpopNonce() = dpopNonceService.provideNonce()
 }

@@ -3,6 +3,10 @@ package at.asitplus.wallet.lib.oidvci
 import com.benasher44.uuid.uuid4
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.time.Clock
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Instant
 
 /**
  * Provides generation, storage and validation of challenges used throughout the code, e.g. as challenges for
@@ -29,19 +33,60 @@ interface NonceService {
 }
 
 /**
- * Holds valid random values in memory, protected with a [Mutex],
- * to ensure a basic form of thread-safety.
+ * Holds valid random values in memory, with all entries having a lifetime of [lifetime],
+ * protected with a [Mutex], to ensure a basic form of thread-safety.
  */
-class DefaultNonceService : NonceService {
+class DefaultNonceService(
+    val lifetime: Duration = 10.minutes,
+    val clock: Clock = Clock.System,
+    /** Will check for expired entries when list reaches [sizeToCheckForExpiration] entries */
+    val sizeToCheckForExpiration: UInt = 100U,
+) : NonceService {
 
-    // TODO Remove values after a certain timeout
+    init {
+        require(lifetime > Duration.ZERO) { "lifetime must be > 0" }
+    }
+
     private val mutex = Mutex()
-    private val values = mutableListOf<String>()
 
-    override suspend fun provideNonce() = uuid4().toString().also { mutex.withLock { values += it } }
+    /** Maps nonce to expiration time. */
+    private val map = mutableMapOf<String, Instant>()
 
-    override suspend fun verifyNonce(it: String) = values.contains(it)
+    override suspend fun provideNonce() = uuid4().toString().also {
+        mutex.withLock {
+            map[it] = clock.now() + lifetime
+            if (map.size >= sizeToCheckForExpiration.toInt()) {
+                cleanupExpiredLocked()
+            }
+        }
+    }
 
-    override suspend fun verifyAndRemoveNonce(it: String) =
-        mutex.withLock { values.remove(it) }
+    override suspend fun verifyNonce(it: String) = mutex.withLock {
+        map[it]?.let { expiration ->
+            if (expiration < clock.now()) {
+                map.remove(it)
+                false
+            } else {
+                true
+            }
+        } ?: false
+    }
+
+
+    override suspend fun verifyAndRemoveNonce(it: String) = mutex.withLock {
+        map.remove(it)?.let { entry ->
+            entry >= clock.now()
+        } ?: false
+    }
+
+    private fun cleanupExpiredLocked() {
+        map.entries.iterator().let {
+            while (it.hasNext()) {
+                if (it.next().value < clock.now()) {
+                    it.remove()
+                }
+            }
+        }
+    }
+
 }

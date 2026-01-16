@@ -26,6 +26,7 @@ import io.matthewnelson.encoding.core.Encoder.Companion.encodeToString
 import kotlin.time.Clock
 import kotlin.time.Clock.System
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.minutes
 
 
@@ -69,8 +70,10 @@ interface TokenVerificationService {
 class JwtTokenVerificationService(
     /** Used to verify nonces of tokens created by the token generation service. */
     private val nonceService: NonceService,
+    /** Used to verify nonces of refresh tokens (long-lived!) created by the token generation service. */
+    internal val refreshTokenNonceService: NonceService,
     /** Used to verify nonces for DPoP proofs of clients. */
-    internal val dpopNonceService: NonceService = DefaultNonceService(),
+    internal val dpopNonceService: NonceService,
     /** Used to verify the signature of the DPoP access token. */
     private val issuerKey: JsonWebKey,
     /** Used to verify client attestation JWTs */
@@ -88,7 +91,7 @@ class JwtTokenVerificationService(
         httpRequest: RequestInfo?,
         validatedClientKey: JsonWebKey?,
     ): String {
-        val tokenJwt = validateToken(refreshToken, JwsContentTypeConstants.RT_JWT)
+        val tokenJwt = validateToken(refreshToken, JwsContentTypeConstants.RT_JWT, refreshTokenNonceService)
         // ath is not required on /token endpoints
         validateDpopProof(null, tokenJwt, httpRequest, dpopNonceService, validatedClientKey)
         return refreshToken
@@ -216,6 +219,7 @@ class JwtTokenVerificationService(
     internal suspend fun validateToken(
         accessToken: String,
         expectedType: String,
+        nonceService: NonceService = this.nonceService,
     ): JwsSigned<OpenId4VciAccessToken> {
         val jwt = JwsSigned.deserialize(OpenId4VciAccessToken.serializer(), accessToken, vckJsonSerializer)
             .getOrElse { throw InvalidToken("could not parse DPoP Token", it) }
