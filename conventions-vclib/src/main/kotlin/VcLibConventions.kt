@@ -3,6 +3,7 @@
 package at.asitplus.gradle
 
 import VcLibVersions
+import at.asitplus.gradle.at.asitplus.gradle.addTestExtensions
 import com.android.build.api.dsl.androidLibrary
 import com.android.build.api.variant.KotlinMultiplatformAndroidComponentsExtension
 import org.gradle.api.Project
@@ -14,9 +15,10 @@ import org.gradle.kotlin.dsl.invoke
 import org.gradle.kotlin.dsl.withType
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinMultiplatformExtension
+import org.jetbrains.kotlin.gradle.dsl.kotlinExtension
 import org.jetbrains.kotlin.gradle.plugin.KotlinDependencyHandler
 import java.io.File
-import java.util.Properties
+import java.util.*
 
 val Project.signumVersionCatalog: VersionCatalog
     get() = extensions.getByType<VersionCatalogsExtension>().named("signum")
@@ -67,6 +69,9 @@ class VcLibConventions : K2Conventions() {
             super.apply(target)
             //if we do this properly, cinterop (swift-klib) blows up, so we hack!
             target.afterEvaluate {
+                (project.kotlinExtension as KotlinMultiplatformExtension).sourceSets
+                    .filter { it.name.endsWith("Test") }
+                    .forEach { it.dependencies { addTestExtensions() } }
 
                 extensions.getByType<KotlinMultiplatformExtension>().apply {
                     sourceSets.forEach {
