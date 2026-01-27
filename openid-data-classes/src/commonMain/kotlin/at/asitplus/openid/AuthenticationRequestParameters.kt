@@ -7,6 +7,7 @@ import at.asitplus.csc.serializers.HashesSerializer
 import at.asitplus.csc.enums.SignatureQualifier
 import at.asitplus.csc.contentEquals
 import at.asitplus.csc.contentHashCode
+import at.asitplus.iso.serializeOrigin
 import at.asitplus.signum.indispensable.asn1.ObjectIdentifier
 import at.asitplus.signum.indispensable.asn1.ObjectIdentifierStringSerializer
 import at.asitplus.signum.indispensable.io.ByteArrayBase64UrlSerializer
@@ -15,6 +16,7 @@ import at.asitplus.signum.indispensable.josef.io.InstantLongSerializer
 import kotlin.time.Instant
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 /**
  * Contents of an OIDC Authentication Request.
@@ -405,12 +407,19 @@ data class AuthenticationRequestParameters(
         get() = redirectUrl
             ?: (clientIdSchemeExtracted as? OpenIdConstants.ClientIdScheme.RedirectUri)?.let { clientIdWithoutPrefix }
 
+    fun verifyExpectedOrigin(actualOrigin: String): Boolean {
+        val expected = expectedOrigins ?: return false
+        val actualSerialized = actualOrigin.serializeOrigin() ?: return false
+        return expected.any { it.serializeOrigin() == actualSerialized }
+    }
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other == null || this::class != other::class) return false
 
         other as AuthenticationRequestParameters
 
+        if (numSignatures != other.numSignatures) return false
         if (responseType != other.responseType) return false
         if (clientId != other.clientId) return false
         if (redirectUrl != other.redirectUrl) return false
@@ -438,28 +447,23 @@ data class AuthenticationRequestParameters(
         if (codeChallenge != other.codeChallenge) return false
         if (codeChallengeMethod != other.codeChallengeMethod) return false
         if (lang != other.lang) return false
-        if (credentialID != null) {
-            if (other.credentialID == null) return false
-            if (!credentialID.contentEquals(other.credentialID)) return false
-        } else if (other.credentialID != null) return false
+        if (!credentialID.contentEquals(other.credentialID)) return false
         if (signatureQualifier != other.signatureQualifier) return false
-        if (numSignatures != other.numSignatures) return false
-        if (!hashes.contentEquals(other.hashes)) return false
+        if (hashes != other.hashes) return false
         if (hashAlgorithmOid != other.hashAlgorithmOid) return false
         if (description != other.description) return false
         if (accountToken != other.accountToken) return false
         if (clientData != other.clientData) return false
         if (transactionData != other.transactionData) return false
         if (expectedOrigins != other.expectedOrigins) return false
-        if (clientIdSchemeExtracted != other.clientIdSchemeExtracted) return false
-        if (clientIdWithoutPrefix != other.clientIdWithoutPrefix) return false
-        if (redirectUrlExtracted != other.redirectUrlExtracted) return false
+        if (verifierInfo != other.verifierInfo) return false
 
         return true
     }
 
     override fun hashCode(): Int {
-        var result = responseType?.hashCode() ?: 0
+        var result = numSignatures ?: 0
+        result = 31 * result + (responseType?.hashCode() ?: 0)
         result = 31 * result + (clientId?.hashCode() ?: 0)
         result = 31 * result + (redirectUrl?.hashCode() ?: 0)
         result = 31 * result + (scope?.hashCode() ?: 0)
@@ -488,19 +492,17 @@ data class AuthenticationRequestParameters(
         result = 31 * result + (lang?.hashCode() ?: 0)
         result = 31 * result + (credentialID?.contentHashCode() ?: 0)
         result = 31 * result + (signatureQualifier?.hashCode() ?: 0)
-        result = 31 * result + (numSignatures ?: 0)
-        result = 31 * result + (hashes?.contentHashCode() ?: 0)
+        result = 31 * result + (hashes?.hashCode() ?: 0)
         result = 31 * result + (hashAlgorithmOid?.hashCode() ?: 0)
         result = 31 * result + (description?.hashCode() ?: 0)
         result = 31 * result + (accountToken?.hashCode() ?: 0)
         result = 31 * result + (clientData?.hashCode() ?: 0)
         result = 31 * result + (transactionData?.hashCode() ?: 0)
         result = 31 * result + (expectedOrigins?.hashCode() ?: 0)
-        result = 31 * result + (clientIdSchemeExtracted?.hashCode() ?: 0)
-        result = 31 * result + (clientIdWithoutPrefix?.hashCode() ?: 0)
-        result = 31 * result + (redirectUrlExtracted?.hashCode() ?: 0)
+        result = 31 * result + (verifierInfo?.hashCode() ?: 0)
         return result
     }
+
 
 }
 
