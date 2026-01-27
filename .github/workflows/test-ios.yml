@@ -1,5 +1,13 @@
 name: Test iOS implementation
-on: [push]
+on:
+  # still run checks on every PR *before* the merge
+  pull_request:
+
+  # run the workflow once more **after** the PR has been merged
+  push:
+    branches:
+      - main
+      - development
 jobs:
   build:
     runs-on: macos-latest
