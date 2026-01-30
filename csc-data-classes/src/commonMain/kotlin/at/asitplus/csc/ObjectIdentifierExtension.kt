@@ -21,6 +21,7 @@ internal fun ObjectIdentifier.getSignAlgorithm(signAlgoParams: Asn1Element?): Si
                 when (it) {
                     is SignatureAlgorithm.ECDSA -> it.digest
                     is SignatureAlgorithm.RSA -> it.digest
+                    is SignatureAlgorithm.MLDSA -> it.digest
                 } != Digest.SHA1
             )
         }
@@ -36,5 +37,6 @@ internal fun ObjectIdentifier?.getHashAlgorithm(signatureAlgorithm: SignatureAlg
     } ?: when (signatureAlgorithm) {
         is SignatureAlgorithm.ECDSA -> signatureAlgorithm.digest
         is SignatureAlgorithm.RSA -> signatureAlgorithm.digest
+        is SignatureAlgorithm.MLDSA -> signatureAlgorithm.digest
         null -> null
     } ?: throw Exception("Unknown hashing algorithm defined with oid $this or signature algorithm $signatureAlgorithm")
