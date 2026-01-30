@@ -6,53 +6,48 @@ import at.asitplus.openid.OidcUserInfo
 import at.asitplus.openid.OidcUserInfoExtended
 import at.asitplus.signum.supreme.sign.EphemeralKey
 import at.asitplus.testballoon.invoke
+import at.asitplus.testballoon.withFixtureGenerator
 import at.asitplus.wallet.lib.data.AtomicAttribute2023
 import at.asitplus.wallet.lib.data.ConstantIndex
 import at.asitplus.wallet.lib.data.ConstantIndex.AtomicAttribute2023.CLAIM_GIVEN_NAME
-import at.asitplus.wallet.lib.data.ConstantIndex.CredentialRepresentation.PLAIN_JWT
 import at.asitplus.wallet.lib.data.CredentialPresentation.PresentationExchangePresentation
 import at.asitplus.wallet.lib.data.CredentialPresentationRequest
-import at.asitplus.wallet.lib.data.CredentialSubject
 import at.asitplus.wallet.lib.data.rfc3986.toUri
 import com.benasher44.uuid.uuid4
-import de.infix.testBalloon.framework.core.TestConfig
-import de.infix.testBalloon.framework.core.aroundEach
 import de.infix.testBalloon.framework.core.testSuite
-import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 
 val AgentPQCJwtTest by testSuite {
-
-
-    lateinit var issuer: Issuer
-    lateinit var holder: Holder
-    lateinit var verifier: Verifier
-    lateinit var holderKeyMaterial: KeyMaterial
-    lateinit var challenge: String
-    lateinit var singularPresentationDefinition: PresentationExchangePresentation
-
-    testConfig = TestConfig.aroundEach {
-        issuer = IssuerAgent(
+    withFixtureGenerator(suspend  {
+        val issuer = IssuerAgent(
             keyMaterial = EphemeralKeyWithoutCert(key = EphemeralKey{ ml {} }.getOrThrow()),
             identifier = "https://issuer.example.com/".toUri(),
             randomSource = RandomSource.Default
         )
 
-        holderKeyMaterial = EphemeralKeyWithoutCert(key = EphemeralKey { ml {} }.getOrThrow())
-        holder = HolderAgent(holderKeyMaterial)
+        val holderKeyMaterial = EphemeralKeyWithoutCert(key = EphemeralKey { ml {} }.getOrThrow())
+        val holder = HolderAgent(holderKeyMaterial)
 
-        verifier = VerifierAgent(identifier = "https://verifier.example.com/")
+        val verifier = VerifierAgent(identifier = "https://verifier.example.com/")
 
-        challenge = uuid4().toString()
+        val challenge = uuid4().toString()
 
-        singularPresentationDefinition = PresentationExchangePresentation(
+        val singularPresentationDefinition = PresentationExchangePresentation(
             CredentialPresentationRequest.PresentationExchangeRequest(
                 PresentationDefinition(DifInputDescriptor(id = uuid4().toString()))))
 
-        it()
-    }
+        object {
+            val issuer = issuer
+            val holder = holder
+            val verifier = verifier
+            val challenge = challenge
+            val singularPresentationDefinition = singularPresentationDefinition
+            val holderKeyMaterial = holderKeyMaterial
+
+        }
+    }) - {
 
     "test" {
         // create a credential to be issued
@@ -63,7 +58,7 @@ val AgentPQCJwtTest by testSuite {
 
         val issuanceDate = Clock.System.now()
         val expirationDate = issuanceDate + 60.seconds
-        val subjectId = holderKeyMaterial.publicKey.didEncoded
+        val subjectId = it.holderKeyMaterial.publicKey.didEncoded
 
         // Create the credential that we want to issue
         // Needs to be decided in WP 4.1
@@ -71,20 +66,20 @@ val AgentPQCJwtTest by testSuite {
             subject = AtomicAttribute2023(subjectId, CLAIM_GIVEN_NAME, "Jakob",),
             expiration = expirationDate,
             scheme = ConstantIndex.AtomicAttribute2023,
-            subjectPublicKey = holderKeyMaterial.publicKey,
+            subjectPublicKey = it.holderKeyMaterial.publicKey,
             userInfo = OidcUserInfoExtended.fromOidcUserInfo(OidcUserInfo("subject")).getOrThrow(),
         )
 
         // Issue the credential to be issued
-        val credential = issuer.issueCredential(credentialToBeIssued).getOrThrow() as Issuer.IssuedCredential.VcJwt
+        val credential = it.issuer.issueCredential(credentialToBeIssued).getOrThrow() as Issuer.IssuedCredential.VcJwt
         println(credential.signedVcJws.serialize())
 
         // Store the credential
-        holder.storeCredential(credential.toStoreCredentialInput())
+        it.holder.storeCredential(credential.toStoreCredentialInput())
 
-        val presentationParameters = holder.createPresentation(
-            PresentationRequestParameters(challenge, "example.com"),
-            singularPresentationDefinition).getOrThrow()
+        val presentationParameters = it.holder.createPresentation(
+            PresentationRequestParameters(it.challenge, "example.com"),
+            it.singularPresentationDefinition).getOrThrow()
             .shouldBeInstanceOf<PresentationResponseParameters.PresentationExchangeParameters>()
 
         // Create a verifiable presentation
@@ -92,7 +87,8 @@ val AgentPQCJwtTest by testSuite {
             .shouldBeInstanceOf<CreatePresentationResult.Signed>()
 
         // Verify a verifiable presentation
-        verifier.verifyPresentationVcJwt(vp.jwsSigned, challenge)
+        it.verifier.verifyPresentationVcJwt(vp.jwsSigned, it.challenge)
             .shouldBeInstanceOf<Verifier.VerifyPresentationResult.ValidationError>()
+        }
     }
 }
